@@ -476,7 +476,7 @@ rl78-*-elf)
 	gdb_sim=../sim/rl78/libsim.a
 	;;
 
-rx-*-elf)
+rx-*-elf | rx-*-linux*)
 	# Target: Renesas RX
 	gdb_target_obs="rx-tdep.o"
 	gdb_sim=../sim/rx/libsim.a

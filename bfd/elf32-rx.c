@@ -3134,6 +3134,14 @@ rx_elf_object_p (bfd * abfd)
 
   return TRUE;
 }
+
+static bfd_boolean
+rx_linux_object_p (bfd * abfd)
+{
+  bfd_default_set_arch_mach (abfd, bfd_arch_rx,
+           elf32_rx_machine (abfd));
+  return TRUE;
+}
  
 
 #ifdef DEBUG
@@ -3590,5 +3598,20 @@ static const struct bfd_elf_special_section elf32_rx_special_sections[] =
 
 #undef	elf32_bed
 #define elf32_bed				elf32_rx_be_ns_bed
+
+#include "elf32-target.h"
+
+#undef	TARGET_LITTLE_SYM
+#define TARGET_LITTLE_SYM	bfd_elf32_rx_le_linux_vec
+#undef  TARGET_LITTLE_NAME
+#define TARGET_LITTLE_NAME	"elf32-rx-linux"
+#undef  TARGET_BIG_SYM
+#undef  TARGET_BIG_NAME
+
+#undef  elf_backend_object_p
+#define elf_backend_object_p			rx_linux_object_p
+#undef  elf_symbol_leading_char
+#undef	elf32_bed
+#define	elf32_bed 				elf32_rx_le_linux_bed
 
 #include "elf32-target.h"

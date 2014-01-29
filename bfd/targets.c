@@ -689,6 +689,7 @@ extern const bfd_target bfd_elf32_rl78_vec;
 extern const bfd_target bfd_elf32_rx_le_vec;
 extern const bfd_target bfd_elf32_rx_be_vec;
 extern const bfd_target bfd_elf32_rx_be_ns_vec;
+extern const bfd_target bfd_elf32_rx_le_linux_vec;
 extern const bfd_target bfd_elf32_s390_vec;
 extern const bfd_target bfd_elf32_bigscore_vec;
 extern const bfd_target bfd_elf32_littlescore_vec;
