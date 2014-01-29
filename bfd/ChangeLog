@@ -1,3 +1,20 @@
+2014-01-28  Nick Clifton  <nickc@redhat.com>
+
+	* dwarf2.c (find_abstract_instance_name): For DW_FORM_ref_addr
+	attributes select the CU containing the abbreviation, which may not
+	be the current CU.
+
+2014-01-24  Alan Modra  <amodra@gmail.com>
+
+	* elf64-ppc.c (ppc_build_one_stub): Correct reloc count passed
+	to get_relocs for ELFv2.
+
+2014-01-23  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR ld/16498
+	* elf.c (_bfd_elf_map_sections_to_segments): Issue a linker error
+	if TLS sections are not adjacent.
+
 2014-01-22  Alan Modra  <amodra@gmail.com>
 
 	* elflink.c (elf_link_add_object_symbols): Call minfo for --as-needed.
