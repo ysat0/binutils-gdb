@@ -25,12 +25,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <signal.h>
 
 #include "opcode/rx.h"
+#include "gdb/callback.h"
 #include "cpu.h"
 #include "mem.h"
 #include "syscalls.h"
 #include "fpu.h"
 #include "err.h"
 #include "misc.h"
+
+#define WAIT_INTERRUPT
 
 #ifdef CYCLE_STATS
 static const char * id_names[] = {
@@ -329,6 +332,10 @@ static int size2bytes[] = {
   4, 1, 1, 1, 2, 2, 2, 3, 4
 };
 
+static unsigned long *trace_buffer;
+static unsigned long tracesize;
+static unsigned long tracetail;
+
 typedef struct {
   unsigned long dpc;
 } RX_Data;
@@ -384,7 +391,7 @@ rx_get_byte (void *vdata)
 }
 
 static int
-get_op (const RX_Opcode_Decoded *rd, int i)
+get_op (const RX_Opcode_Decoded *rd, int i, SI opcode_pc)
 {
   const RX_Opcode_Operand *o = rd->op + i;
   int addr, rv = 0;
@@ -439,27 +446,28 @@ get_op (const RX_Opcode_Decoded *rd, int i)
 	case RX_Byte: /* undefined extension */
 	case RX_UByte:
 	case RX_SByte:
-	  rv = mem_get_qi (addr);
+	  rv = mem_get_qi (addr, opcode_pc);
 	  break;
 
 	case RX_Word: /* undefined extension */
 	case RX_UWord:
 	case RX_SWord:
-	  rv = mem_get_hi (addr);
+	  rv = mem_get_hi (addr, opcode_pc);
 	  break;
 
 	case RX_3Byte:
-	  rv = mem_get_psi (addr);
+	  rv = mem_get_psi (addr, opcode_pc);
 	  break;
 
 	case RX_Long:
-	  rv = mem_get_si (addr);
+	  rv = mem_get_si (addr, opcode_pc);
 	  break;
 	}
 
       if (o->type == RX_Operand_Postinc)
 	put_reg (o->reg, get_reg (o->reg) + size2bytes[o->size]);
 
+      rx_cycles += 2;
       break;
 
     case RX_Operand_Condition:	/* eq, gtu, etc */
@@ -511,7 +519,7 @@ get_op (const RX_Opcode_Decoded *rd, int i)
 }
 
 static void
-put_op (const RX_Opcode_Decoded *rd, int i, int v)
+put_op (const RX_Opcode_Decoded *rd, int i, int v, SI opcode_pc)
 {
   const RX_Opcode_Operand *o = rd->op + i;
   int addr;
@@ -603,21 +611,21 @@ put_op (const RX_Opcode_Decoded *rd, int i, int v)
 	case RX_Byte: /* undefined extension */
 	case RX_UByte:
 	case RX_SByte:
-	  mem_put_qi (addr, v);
+	  mem_put_qi (addr, v, opcode_pc);
 	  break;
 
 	case RX_Word: /* undefined extension */
 	case RX_UWord:
 	case RX_SWord:
-	  mem_put_hi (addr, v);
+	  mem_put_hi (addr, v, opcode_pc);
 	  break;
 
 	case RX_3Byte:
-	  mem_put_psi (addr, v);
+	  mem_put_psi (addr, v, opcode_pc);
 	  break;
 
 	case RX_Long:
-	  mem_put_si (addr, v);
+	  mem_put_si (addr, v, opcode_pc);
 	  break;
 	}
 
@@ -635,12 +643,12 @@ put_op (const RX_Opcode_Decoded *rd, int i, int v)
     }
 }
 
-#define PD(x) put_op (opcode, 0, x)
-#define PS(x) put_op (opcode, 1, x)
-#define PS2(x) put_op (opcode, 2, x)
-#define GD() get_op (opcode, 0)
-#define GS() get_op (opcode, 1)
-#define GS2() get_op (opcode, 2)
+#define PD(x) put_op (opcode, 0, x, opcode_pc)
+#define PS(x) put_op (opcode, 1, x, opcode_pc)
+#define PS2(x) put_op (opcode, 2, x, opcode_pc)
+#define GD() get_op (opcode, 0, opcode_pc)
+#define GS() get_op (opcode, 1, opcode_pc)
+#define GS2() get_op (opcode, 2, opcode_pc)
 #define DSZ() size2bytes[opcode->op[0].size]
 #define SSZ() size2bytes[opcode->op[0].size]
 #define S2SZ() size2bytes[opcode->op[0].size]
@@ -650,12 +658,12 @@ put_op (const RX_Opcode_Decoded *rd, int i, int v)
 #define US2() ((opcode->op[2].type == RX_Operand_None) ? GS() : GS2())
 
 static void
-push(int val)
+push(int val, SI opcode_pc)
 {
   int rsp = get_reg (sp);
   rsp -= 4;
   put_reg (sp, rsp);
-  mem_put_si (rsp, val);
+  mem_put_si (rsp, val, opcode_pc);
 }
 
 /* Just like the above, but tag the memory as "pushed pc" so if anyone
@@ -666,29 +674,29 @@ pushpc(int val)
   int rsp = get_reg (sp);
   rsp -= 4;
   put_reg (sp, rsp);
-  mem_put_si (rsp, val);
+  mem_put_si (rsp, val, val);
   mem_set_content_range (rsp, rsp+3, MC_PUSHED_PC);
 }
 
 static int
-pop()
+pop(SI opcode_pc)
 {
   int rv;
   int rsp = get_reg (sp);
-  rv = mem_get_si (rsp);
+  rv = mem_get_si (rsp, opcode_pc);
   rsp += 4;
   put_reg (sp, rsp);
   return rv;
 }
 
 static int
-poppc()
+poppc(SI opcode_pc)
 {
   int rv;
   int rsp = get_reg (sp);
   if (mem_get_content_type (rsp) != MC_PUSHED_PC)
     execution_error (SIM_ERR_CORRUPT_STACK, rsp);
-  rv = mem_get_si (rsp);
+  rv = mem_get_si (rsp, opcode_pc);
   mem_set_content_range (rsp, rsp+3, MC_UNINIT);
   rsp += 4;
   put_reg (sp, rsp);
@@ -761,6 +769,7 @@ static int
 fop_fadd (fp_t s1, fp_t s2, fp_t *d)
 {
   *d = rxfp_add (s1, s2);
+  rx_cycles += 3;
   return 1;
 }
 
@@ -768,6 +777,7 @@ static int
 fop_fmul (fp_t s1, fp_t s2, fp_t *d)
 {
   *d = rxfp_mul (s1, s2);
+  rx_cycles += 2;
   return 1;
 }
 
@@ -775,6 +785,7 @@ static int
 fop_fdiv (fp_t s1, fp_t s2, fp_t *d)
 {
   *d = rxfp_div (s1, s2);
+  rx_cycles += 15;
   return 1;
 }
 
@@ -782,6 +793,7 @@ static int
 fop_fsub (fp_t s1, fp_t s2, fp_t *d)
 {
   *d = rxfp_sub (s1, s2);
+  rx_cycles += 3;
   return 1;
 }
 
@@ -839,7 +851,7 @@ generate_exception (unsigned long type, SI opcode_pc)
 {
   SI old_psw, old_pc, new_pc;
 
-  new_pc = mem_get_si (exception_info[type].vaddr);
+  new_pc = mem_get_si (exception_info[type].vaddr, opcode_pc);
   /* 0x00020000 is the value used to initialise the known
      exception vectors (see rx.ld), but it is a reserved
      area of memory so do not try to access it, and if the
@@ -902,6 +914,21 @@ do_fp_exception (unsigned long opcode_pc)
   return RX_MAKE_STEPPED ();
 }
 
+static void 
+add_trace(unsigned long opcode_pc)
+{
+  if (trace == 0)
+    return ;
+  if (tracesize == tracetail)
+    {
+      trace_buffer = (unsigned long *)realloc(trace_buffer, 
+					      (tracesize * sizeof(unsigned long) + 65536));
+      tracesize += 65536 / sizeof(unsigned long);
+    }
+  if (trace_buffer)
+    trace_buffer[tracetail++] = opcode_pc;
+}
+
 static int
 op_is_memory (const RX_Opcode_Decoded *rd, int i)
 {
@@ -936,6 +963,7 @@ decode_opcode ()
 #ifdef CYCLE_ACCURATE
   unsigned int tx;
 #endif
+  int irq;
 
 #ifdef CYCLE_STATS
   prev_cycle_count = regs.cycle_count;
@@ -946,8 +974,15 @@ decode_opcode ()
   memory_dest = 0;
 #endif
 
-  rx_cycles ++;
-
+  irq = io_simulation(regs.r_psw >> 24);
+  if ((irq >= 0) && (regs.r_psw & FLAGBIT_I))
+    {
+      int old_psw = regs.r_psw;
+      regs.r_psw &= ~(FLAGBIT_I | FLAGBIT_U | FLAGBIT_PM);
+      pushpc (old_psw);
+      pushpc (regs.r_pc);
+      regs.r_pc = mem_get_si (regs.r_intb + 4 * irq, regs.r_pc);
+    }
   maybe_get_mem_page (regs.r_pc);
 
   opcode_pc = regs.r_pc;
@@ -983,6 +1018,8 @@ decode_opcode ()
     }
 #endif
 
+  rx_cycles ++;
+  add_trace(opcode_pc);
   regs.r_pc += opcode_size;
 
   rx_flagmask = opcode->flags_s;
@@ -1078,6 +1115,7 @@ decode_opcode ()
 	  branch_stalls ++;
 #endif
 #endif
+	  rx_cycles += 2;
 	}
 #ifdef CYCLE_ACCURATE
       else
@@ -1107,6 +1145,7 @@ decode_opcode ()
 	  branch_stalls ++;
 #endif
 #endif
+	  rx_cycles += 2;
 	}
 #ifdef CYCLE_ACCURATE
       else
@@ -1127,8 +1166,9 @@ decode_opcode ()
 	regs.r_psw &= ~(FLAGBIT_I | FLAGBIT_U | FLAGBIT_PM);
 	pushpc (old_psw);
 	pushpc (regs.r_pc);
-	regs.r_pc = mem_get_si (regs.r_intb);
+	regs.r_pc = mem_get_si (regs.r_intb, opcode_pc);
 	cycles(6);
+	rx_cycles += 5; /* TBD */
       }
       break;
 
@@ -1138,7 +1178,10 @@ decode_opcode ()
       if (opcode->op[0].type == RX_Operand_Register)
 	mb &= 0x1f;
       else
-	mb &= 0x07;
+	{
+	  mb &= 0x07;
+	  rx_cycles += 2;
+	}
       ma |= (1 << mb);
       PD (ma);
       EBIT;
@@ -1184,6 +1227,7 @@ decode_opcode ()
 	  PD (v);
 	  div_cycles (mb, ma);
 	}
+      rx_cycles += 9; /* TBD */
       break;
 
     case RXO_divu: /* d = d / s */
@@ -1204,6 +1248,7 @@ decode_opcode ()
 	  PD (v);
 	  divu_cycles (umb, uma);
 	}
+      rx_cycles += 9; /* TBD */
       break;
 
     case RXO_emul:
@@ -1214,6 +1259,7 @@ decode_opcode ()
       put_reg (opcode->op[0].reg, sll);
       put_reg (opcode->op[0].reg + 1, sll >> 32);
       E2;
+      rx_cycles += 9; /* TBD */
       break;
 
     case RXO_emulu:
@@ -1224,6 +1270,7 @@ decode_opcode ()
       put_reg (opcode->op[0].reg, ll);
       put_reg (opcode->op[0].reg + 1, ll >> 32);
       E2;
+      rx_cycles += 9; /* TBD */
       break;
 
     case RXO_fadd:
@@ -1258,6 +1305,7 @@ decode_opcode ()
       regs.fast_return = 0;
       cycles(3);
 #endif
+      rx_cycles += 2;
       break;
 
     case RXO_fsub:
@@ -1290,9 +1338,10 @@ decode_opcode ()
 	  regs.r_psw &= ~(FLAGBIT_I | FLAGBIT_U | FLAGBIT_PM);
 	  pushpc (old_psw);
 	  pushpc (regs.r_pc);
-	  regs.r_pc = mem_get_si (regs.r_intb + 4 * v);
+	  regs.r_pc = mem_get_si (regs.r_intb + 4 * v, opcode_pc);
 	}
       cycles (6);
+      rx_cycles += 6;
       break;
 
     case RXO_itof:
@@ -1338,6 +1387,7 @@ decode_opcode ()
 	  }
 	regs.fast_return = 1;
 #endif
+	rx_cycles += 2;
       }
       break;
 
@@ -1524,8 +1574,9 @@ decode_opcode ()
 	{
 	  cycles (1);
 	  RLD (v);
-	  put_reg (v, pop ());
+	  put_reg (v, pop (opcode_pc));
 	}
+      rx_cycles += opcode->op[2].reg - opcode->op[1].reg;
       break;
 
     case RXO_pushm:
@@ -1540,9 +1591,10 @@ decode_opcode ()
       for (v = opcode->op[2].reg; v >= opcode->op[1].reg; v--)
 	{
 	  RL (v);
-	  push (get_reg (v));
+	  push (get_reg (v), opcode_pc);
 	}
       cycles (opcode->op[2].reg - opcode->op[1].reg + 1);
+      rx_cycles += opcode->op[2].reg - opcode->op[1].reg;
       break;
 
     case RXO_racw:
@@ -1560,14 +1612,15 @@ decode_opcode ()
 
     case RXO_rte:
       PRIVILEDGED ();
-      regs.r_pc = poppc ();
-      regs.r_psw = poppc ();
+      regs.r_pc = poppc (opcode_pc);
+      regs.r_psw = poppc (opcode_pc);
       if (FLAG_PM)
 	regs.r_psw |= FLAGBIT_U;
 #ifdef CYCLE_ACCURATE
       regs.fast_return = 0;
       cycles (6);
 #endif
+      rx_cycles += 2;
       break;
 
     case RXO_revl:
@@ -1602,22 +1655,25 @@ decode_opcode ()
 	  switch (opcode->size)
 	    {
 	    case RX_Long:
-	      ma = mem_get_si (regs.r[1]);
-	      mb = mem_get_si (regs.r[2]);
+	      ma = mem_get_si (regs.r[1], opcode_pc);
+	      mb = mem_get_si (regs.r[2], opcode_pc);
 	      regs.r[1] += 4;
 	      regs.r[2] += 4;
+	      rx_cycles += 4;
 	      break;
 	    case RX_Word:
-	      ma = sign_ext (mem_get_hi (regs.r[1]), 16);
-	      mb = sign_ext (mem_get_hi (regs.r[2]), 16);
+	      ma = sign_ext (mem_get_hi (regs.r[1], opcode_pc), 16);
+	      mb = sign_ext (mem_get_hi (regs.r[2], opcode_pc), 16);
 	      regs.r[1] += 2;
 	      regs.r[2] += 2;
+	      rx_cycles += 2;
 	      break;
 	    case RX_Byte:
-	      ma = sign_ext (mem_get_qi (regs.r[1]), 8);
-	      mb = sign_ext (mem_get_qi (regs.r[2]), 8);
+	      ma = sign_ext (mem_get_qi (regs.r[1], opcode_pc), 8);
+	      mb = sign_ext (mem_get_qi (regs.r[2], opcode_pc), 8);
 	      regs.r[1] += 1;
 	      regs.r[2] += 1;
+	      rx_cycles += 1;
 	      break;
 	    default:
 	      abort ();
@@ -1668,6 +1724,7 @@ decode_opcode ()
 	  abort ();
 	}
 #endif
+      rx_cycles += 5;
       break;
 
     case RXO_rolc:
@@ -1725,6 +1782,7 @@ decode_opcode ()
       tprintf("(int) %g = %d\n", int2float(ma), mb);
       set_sz (mb, 4);
       E (2);
+      rx_cycles++;
       break;
 
     case RXO_rts:
@@ -1732,7 +1790,7 @@ decode_opcode ()
 #ifdef CYCLE_ACCURATE
 	int cyc = 5;
 #endif
-	regs.r_pc = poppc ();
+	regs.r_pc = poppc (opcode_pc);
 #ifdef CYCLE_ACCURATE
 	/* Note: specs say 5, chip says 3.  */
 	if (regs.fast_return && regs.link_register == regs.r_pc)
@@ -1747,6 +1805,7 @@ decode_opcode ()
 	regs.fast_return = 0;
 	branch_alignment_penalty = 1;
 #endif
+	rx_cycles += 4;
       }
       break;
 
@@ -1764,7 +1823,7 @@ decode_opcode ()
 	  for (i = opcode->op[2].reg; i <= opcode->op[0].reg; i ++)
 	    {
 	      RLD (i);
-	      put_reg (i, pop ());
+	      put_reg (i, pop (opcode_pc));
 	    }
 	}
       else
@@ -1773,8 +1832,9 @@ decode_opcode ()
 	  tx = 0;
 #endif
 	  put_reg (0, get_reg (0) + GS());
+	  rx_cycles += 4;
 	}
-      put_reg (pc, poppc());
+      put_reg (pc, poppc(opcode_pc));
 #ifdef CYCLE_ACCURATE
       if (regs.fast_return && regs.link_register == regs.r_pc)
 	{
@@ -1835,11 +1895,12 @@ decode_opcode ()
 #endif
       while (regs.r[3] != 0)
 	{
-	  uma = mem_get_qi (regs.r[1] ++);
-	  umb = mem_get_qi (regs.r[2] ++);
+		uma = mem_get_qi (regs.r[1] ++, opcode_pc);
+		umb = mem_get_qi (regs.r[2] ++, opcode_pc);
 	  regs.r[3] --;
 	  if (uma != umb || uma == 0)
 	    break;
+	  rx_cycles += 4;
 	}
       if (uma == umb)
 	set_zc (1, 1);
@@ -1865,9 +1926,10 @@ decode_opcode ()
 #endif
       while (regs.r[3])
 	{
-	  uma = mem_get_qi (regs.r[2] --);
-	  mem_put_qi (regs.r[1]--, uma);
+		uma = mem_get_qi (regs.r[2] --, opcode_pc);
+		mem_put_qi (regs.r[1]--, uma, opcode_pc);
 	  regs.r[3] --;
+	  rx_cycles += 3;
 	}
 #ifdef CYCLE_ACCURATE
       if (tx > 3)
@@ -1884,9 +1946,10 @@ decode_opcode ()
 #endif
       while (regs.r[3])
 	{
-	  uma = mem_get_qi (regs.r[2] ++);
-	  mem_put_qi (regs.r[1]++, uma);
+		uma = mem_get_qi (regs.r[2] ++, opcode_pc);
+		mem_put_qi (regs.r[1]++, uma, opcode_pc);
 	  regs.r[3] --;
+	  rx_cycles += 3;
 	}
       cycles (2 + 3 * (int)(tx / 4) + 3 * (tx % 4));
       break;
@@ -1897,9 +1960,10 @@ decode_opcode ()
 #endif
       while (regs.r[3] != 0)
 	{
-	  uma = mem_get_qi (regs.r[2] ++);
-	  mem_put_qi (regs.r[1]++, uma);
+		uma = mem_get_qi (regs.r[2] ++, opcode_pc);
+	  mem_put_qi (regs.r[1]++, uma, opcode_pc);
 	  regs.r[3] --;
+	  rx_cycles += 3;
 	  if (uma == 0)
 	    break;
 	}
@@ -1931,33 +1995,37 @@ decode_opcode ()
 	case RX_Long:
 	  while (regs.r[3] != 0)
 	    {
-	      mem_put_si (regs.r[1], regs.r[2]);
+		    mem_put_si (regs.r[1], regs.r[2], opcode_pc);
 	      regs.r[1] += 4;
 	      regs.r[3] --;
+	      rx_cycles += 4;
 	    }
 	  cycles (2 + tx);
 	  break;
 	case RX_Word:
 	  while (regs.r[3] != 0)
 	    {
-	      mem_put_hi (regs.r[1], regs.r[2]);
+		    mem_put_hi (regs.r[1], regs.r[2], opcode_pc);
 	      regs.r[1] += 2;
 	      regs.r[3] --;
+	      rx_cycles += 2;
 	    }
 	  cycles (2 + (int)(tx / 2) + tx % 2);
 	  break;
 	case RX_Byte:
 	  while (regs.r[3] != 0)
 	    {
-	      mem_put_qi (regs.r[1], regs.r[2]);
+		    mem_put_qi (regs.r[1], regs.r[2], opcode_pc);
 	      regs.r[1] ++;
 	      regs.r[3] --;
+	      rx_cycles += 1;
 	    }
 	  cycles (2 + (int)(tx / 4) + tx % 4);
 	  break;
 	default:
 	  abort ();
 	}
+      rx_cycles += 2;
       break;
 
     case RXO_stcc:
@@ -1992,11 +2060,12 @@ decode_opcode ()
 	  while (regs.r[3] != 0)
 	    {
 	      regs.r[3] --;
-	      umb = mem_get_si (get_reg (1));
+	      umb = mem_get_si (get_reg (1), opcode_pc);
 	      regs.r[1] += 4;
 #ifdef CYCLE_ACCURATE
 	      tx ++;
 #endif
+	      rx_cycles += 4;
 	      if (umb == uma)
 		break;
 	    }
@@ -2009,11 +2078,12 @@ decode_opcode ()
 	  while (regs.r[3] != 0)
 	    {
 	      regs.r[3] --;
-	      umb = mem_get_hi (get_reg (1));
+	      umb = mem_get_hi (get_reg (1), opcode_pc);
 	      regs.r[1] += 2;
 #ifdef CYCLE_ACCURATE
 	      tx ++;
 #endif
+	      rx_cycles += 2;
 	      if (umb == uma)
 		break;
 	    }
@@ -2026,17 +2096,19 @@ decode_opcode ()
 	  while (regs.r[3] != 0)
 	    {
 	      regs.r[3] --;
-	      umb = mem_get_qi (regs.r[1]);
+	      umb = mem_get_qi (regs.r[1], opcode_pc);
 	      regs.r[1] += 1;
 #ifdef CYCLE_ACCURATE
 	      tx ++;
 #endif
+	      rx_cycles += 1;
 	      if (umb == uma)
 		break;
 	    }
 #ifdef CYCLE_ACCURATE
 	  cycles (3 + 3 * (tx / 4) + 3 * (tx % 4));
 #endif
+	  rx_cycles += 2;
 	  break;
 	default:
 	  abort();
@@ -2061,11 +2133,12 @@ decode_opcode ()
 	  while (regs.r[3] != 0)
 	    {
 	      regs.r[3] --;
-	      umb = mem_get_si (get_reg (1));
+	      umb = mem_get_si (get_reg (1), opcode_pc);
 	      regs.r[1] += 4;
 #ifdef CYCLE_ACCURATE
 	      tx ++;
 #endif
+	      rx_cycles += 4;
 	      if (umb != uma)
 		break;
 	    }
@@ -2078,11 +2151,12 @@ decode_opcode ()
 	  while (regs.r[3] != 0)
 	    {
 	      regs.r[3] --;
-	      umb = mem_get_hi (get_reg (1));
+	      umb = mem_get_hi (get_reg (1), opcode_pc);
 	      regs.r[1] += 2;
 #ifdef CYCLE_ACCURATE
 	      tx ++;
 #endif
+	      rx_cycles += 1;
 	      if (umb != uma)
 		break;
 	    }
@@ -2095,11 +2169,12 @@ decode_opcode ()
 	  while (regs.r[3] != 0)
 	    {
 	      regs.r[3] --;
-	      umb = mem_get_qi (regs.r[1]);
+	      umb = mem_get_qi (regs.r[1], opcode_pc);
 	      regs.r[1] += 1;
 #ifdef CYCLE_ACCURATE
 	      tx ++;
 #endif
+	      rx_cycles += 1;
 	      if (umb != uma)
 		break;
 	    }
@@ -2110,6 +2185,7 @@ decode_opcode ()
 	default:
 	  abort();
 	}
+      rx_cycles += 2;
       if (uma == umb)
 	set_zc (1, 1);
       else
@@ -2119,8 +2195,22 @@ decode_opcode ()
     case RXO_wait:
       PRIVILEDGED ();
       regs.r_psw |= FLAGBIT_I;
+#ifndef WAIT_INTERRUPT
       DO_RETURN (RX_MAKE_STOPPED(0));
-
+#else
+      while (irq = io_simulation(regs.r_psw >> 24) == -1) {
+	rx_cycles++;
+	usleep(1);
+      }
+      {
+	int old_psw = regs.r_psw;
+	regs.r_psw &= ~(FLAGBIT_I | FLAGBIT_U | FLAGBIT_PM);
+	pushpc (old_psw);
+	pushpc (regs.r_pc);
+	regs.r_pc = mem_get_si (regs.r_intb + 4 * irq, regs.r_pc);
+      }
+      break;
+#endif
     case RXO_xchg:
 #ifdef CYCLE_ACCURATE
       regs.m2m = 0;
@@ -2262,4 +2352,43 @@ pipeline_stats (void)
   printf("%13s branch alignment stalls\n", comma (branch_alignment_stalls));
   printf("%13s fast returns\n", comma (fast_returns));
 #endif
+}
+
+void 
+rx_init_history(void)
+{
+  if (trace_buffer)
+    free(trace_buffer);
+  trace_buffer = malloc(65536);
+  tracesize = 65536 / sizeof(unsigned long);
+  tracetail = 0;
+}
+
+void show_trace(struct host_callback_struct *callback, int lines)
+{
+  unsigned long idx;
+  idx = tracetail - lines;
+  for (; lines > 0; --lines)
+    {
+      if (trace_buffer[idx] != -1)
+	(*callback->printf_filtered) (callback,
+				      "0x%08lx\n", trace_buffer[idx]);
+      idx++;
+    }
+  (*callback->printf_filtered) (callback, "\n");
+}
+
+void save_trace(struct host_callback_struct *callback, char *filename)
+{
+  FILE *fp;
+  unsigned long idx;
+  fp = fopen(filename, "w");
+  if (!fp) {
+      (*callback->printf_filtered) (callback, 
+				    "save-history: file open failed.\n");
+      return ;
+  }
+  for (idx = 0; idx < tracetail; idx++)
+    fprintf(fp, "0x%08lx\n", trace_buffer[idx]);
+  fclose(fp);
 }

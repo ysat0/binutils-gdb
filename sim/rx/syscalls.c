@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <string.h>
 
 #include "gdb/callback.h"
 
@@ -36,6 +37,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* The current syscall callbacks we're using.  */
 static struct host_callback_struct *callbacks;
+
+static int argc;
+static char *argbuf;
+static int argsize;
 
 void
 set_callbacks (struct host_callback_struct *cb)
@@ -77,7 +82,7 @@ arg ()
   if (argp < 4)
     return get_reg (argp);
 
-  rv = mem_get_si (get_reg (sp) + stackp);
+  rv = mem_get_si (get_reg (sp) + stackp, 0);
   stackp += 4;
   return rv;
 }
@@ -88,7 +93,7 @@ read_target (char *buffer, int address, int count, int asciiz)
   char byte;
   while (count > 0)
     {
-      byte = mem_get_qi (address++);
+	    byte = mem_get_qi (address++, 0);
       *buffer++ = byte;
       if (asciiz && (byte == 0))
 	return;
@@ -103,7 +108,7 @@ write_target (char *buffer, int address, int count, int asciiz)
   while (count > 0)
     {
       byte = *buffer++;
-      mem_put_qi (address++, byte);
+      mem_put_qi (address++, byte, 0);
       if (asciiz && (byte == 0))
 	return;
       count--;
@@ -271,8 +276,8 @@ rx_syscall (int id)
 	if (trace)
 	  printf ("gettimeofday: %ld sec %ld usec to 0x%x\n", tv.tv_sec,
 		  tv.tv_usec, tvaddr);
-	mem_put_si (tvaddr, tv.tv_sec);
-	mem_put_si (tvaddr + 4, tv.tv_usec);
+	mem_put_si (tvaddr, tv.tv_sec, 0);
+	mem_put_si (tvaddr + 4, tv.tv_usec, 0);
 	put_reg (1, rv);
       }
       break;
@@ -301,13 +306,55 @@ rx_syscall (int id)
       }
       break;
 
+    case SYS_argvlen:
+      put_reg(1, argsize);
+      break;
+
+    case SYS_argv:
+      {
+	unsigned long buf = arg();
+	unsigned long len = arg();
+	if (len < argsize)
+	  {
+	    put_reg(1, 0);
+	  }
+	else
+	  {
+	    write_target(argbuf, buf, argsize, 0);
+	    put_reg(1, argc);
+	  }
+	break;
+      }
+
     case 255:
       {
 	int addr = arg ();
-	mem_put_si (addr, rx_cycles + mem_usage_cycles());
+	mem_put_si (addr, rx_cycles + mem_usage_cycles(), 0);
       }
       break;
 
     }
   return RX_MAKE_STEPPED ();
+}
+
+void
+rx_set_argument(char *argv[])
+{
+  int i;
+  int len;
+  char *p;
+
+  for (len = 0, i = 0; argv[i]; i++)
+    len += strlen(argv[i]) + 1;
+  argc = i;
+  argsize = len;
+  p = argbuf = malloc(len);
+  if (argbuf)
+    {
+      for (i = 0; i < argc; i++)
+	{
+	  strcpy(p, argv[i]);
+	  p += strlen(argv[i]) + 1;
+	}
+    }
 }

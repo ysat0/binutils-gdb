@@ -45,7 +45,7 @@ sim_dis_read (bfd_vma memaddr, bfd_byte * ptr, unsigned int length,
     {
       /* See load.c for an explanation of this.  */
       for (i=0; i<length; i++)
-	ptr[i] = mem_get_qi ((memaddr + i) ^ 3);
+	ptr[i] = mem_get_qi ((memaddr + i) ^ 3, 0);
     }
   else
     mem_get_blk (memaddr, ptr, length);
@@ -334,9 +334,9 @@ sim_disasm_one (void)
   for (i = 0; i < max; i++)
     {
       if (rx_big_endian)
-	printf ("%02x", mem_get_qi ((mypc + i) ^ 3));
+	printf ("%02x", mem_get_qi ((mypc + i) ^ 3, 0));
       else
-	printf ("%02x", mem_get_qi (mypc + i));
+	printf ("%02x", mem_get_qi (mypc + i, 0));
     }
 
   do

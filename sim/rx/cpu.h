@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <stdint.h>
 #include <setjmp.h>
+#include "gdb/callback.h"
 
 extern int verbose;
 extern int trace;
@@ -243,3 +244,9 @@ extern void pipeline_stats (void);
 extern void trace_register_changes ();
 extern void generate_access_exception (void);
 extern jmp_buf decode_jmp_buf;
+
+extern void rx_set_argument (char *[]);
+extern void show_memlog(host_callback *, int);
+extern void save_memlog(host_callback *, char *);
+extern void show_trace(host_callback *, int);
+extern void save_trace(host_callback *, char *);

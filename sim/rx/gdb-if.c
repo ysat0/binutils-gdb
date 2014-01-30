@@ -55,6 +55,7 @@ static struct sim_state the_minisim = {
 };
 
 static int open;
+static struct host_callback_struct *host_cb;
 
 SIM_DESC
 sim_open (SIM_OPEN_KIND kind,
@@ -70,12 +71,13 @@ sim_open (SIM_OPEN_KIND kind,
     fprintf (stderr, "rx minisim: sim_open KIND != SIM_OPEN_DEBUG: %d\n",
 	     kind);
 
-  set_callbacks (callback);
+  set_callbacks (host_cb = callback);
 
   /* We don't expect any command-line arguments.  */
 
   init_mem ();
   init_regs ();
+  init_io();
   execution_error_init_debugger ();
 
   sim_disasm_init (abfd);
@@ -97,6 +99,7 @@ sim_close (SIM_DESC sd, int quitting)
 
   /* Not much to do.  At least free up our memory.  */
   init_mem ();
+  sci_close();
 
   open = 0;
 }
@@ -218,6 +221,8 @@ sim_create_inferior (SIM_DESC sd, struct bfd *abfd, char **argv, char **env)
       build_swap_list (abfd);
     }
 
+  rx_set_argument(argv);
+
   return SIM_RC_OK;
 }
 
@@ -237,7 +242,7 @@ sim_read (SIM_DESC sd, SIM_ADDR mem, unsigned char *buf, int length)
     {
       bfd_vma addr = mem + i;
       int do_swap = addr_in_swap_list (addr);
-      buf[i] = mem_get_qi (addr ^ (do_swap ? 3 : 0));
+      buf[i] = mem_get_qi (addr ^ (do_swap ? 3 : 0), 0);
 
       if (execution_error_get_last_error () != SIM_ERR_NONE)
 	return i;
@@ -259,7 +264,7 @@ sim_write (SIM_DESC sd, SIM_ADDR mem, const unsigned char *buf, int length)
     {
       bfd_vma addr = mem + i;
       int do_swap = addr_in_swap_list (addr);
-      mem_put_qi (addr ^ (do_swap ? 3 : 0), buf[i]);
+      mem_put_qi (addr ^ (do_swap ? 3 : 0), buf[i], 0);
 
       if (execution_error_get_last_error () != SIM_ERR_NONE)
 	return i;
@@ -730,6 +735,7 @@ handle_step (int rc)
     }
 }
 
+void rx_init_history(void);
 
 void
 sim_resume (SIM_DESC sd, int step, int sig_to_deliver)
@@ -746,6 +752,7 @@ sim_resume (SIM_DESC sd, int step, int sig_to_deliver)
     }
 
   execution_error_clear_last_error ();
+  rx_init_history();
 
   if (step)
     {
@@ -857,6 +864,61 @@ sim_do_command (SIM_DESC sd, char *cmd)
       else
 	printf ("The 'sim verbose' command expects 'on', 'noisy', or 'off'"
 		" as an argument.\n");
+    }
+  else if (strcmp (cmd, "sci") == 0)
+    {
+      if (strcmp (args, "pty") == 0)
+	sci_open_pty(host_cb);
+      else if (strncmp(args, "net", 3) == 0)
+	{
+	  args += 3;
+	  while(isspace(*args)) args++;
+	  sci_open_net(host_cb, atoi(args));
+	}
+    }
+  else if (strcmp (cmd, "map") == 0)
+    {
+      show_memmap(host_cb);
+    }
+  else if (strncmp(cmd, "show-trace", 10) == 0)
+    {
+      int lines = 16;
+      if (*args)
+	lines = atoi(args);
+      if (lines > 0)
+	show_trace(host_cb, lines);
+      else
+	(host_cb->printf_filtered) (host_cb,
+				    "Invalid lines\n");
+      return;
+    }
+  else if (strncmp(cmd, "save-trace", 10) == 0)
+    {
+      if (*args)
+	save_trace(host_cb, args);
+      else
+	(host_cb->printf_filtered) (host_cb,
+				    "Invalid filename\n");
+    }
+  else if (strncmp(cmd, "show-memlog", 11) == 0)
+    {
+      int lines = 16;
+      if (*args)
+	lines = atoi(args);
+      if (lines > 0)
+	show_memlog(host_cb, lines);
+      else
+	(host_cb->printf_filtered) (host_cb,
+				    "Invalid lines\n");
+      return;
+    }
+  else if (strncmp(cmd, "save-memlog", 11) == 0)
+    {
+      if (*args)
+	save_memlog(host_cb, args);
+      else
+	(host_cb->printf_filtered) (host_cb,
+				    "Invalid filename\n");
     }
   else
     printf ("The 'sim' command expects either 'trace' or 'verbose'"

@@ -48,19 +48,19 @@ unsigned char *rx_mem_ptr (unsigned long address, enum mem_ptr_action action);
 RX_Opcode_Decoded **rx_mem_decode_cache (unsigned long address);
 #endif
 
-void mem_put_qi (int address, unsigned char value);
-void mem_put_hi (int address, unsigned short value);
-void mem_put_psi (int address, unsigned long value);
-void mem_put_si (int address, unsigned long value);
+void mem_put_qi (int address, unsigned char value, unsigned long mpc);
+void mem_put_hi (int address, unsigned short value, unsigned long mpc);
+void mem_put_psi (int address, unsigned long value, unsigned long mpc);
+void mem_put_si (int address, unsigned long value, unsigned long mpc);
 
 void mem_put_blk (int address, void *bufptr, int nbytes);
 
 unsigned char mem_get_pc (int address);
 
-unsigned char mem_get_qi (int address);
-unsigned short mem_get_hi (int address);
-unsigned long mem_get_psi (int address);
-unsigned long mem_get_si (int address);
+unsigned char mem_get_qi (int address, unsigned long mpc);
+unsigned short mem_get_hi (int address, unsigned long mpc);
+unsigned long mem_get_psi (int address, unsigned long mpc);
+unsigned long mem_get_si (int address, unsigned long mpc);
 
 void mem_get_blk (int address, void *bufptr, int nbytes);
 
@@ -69,3 +69,12 @@ int sign_ext (int v, int bits);
 void mem_set_content_type (int address, enum mem_content_type type);
 void mem_set_content_range (int start_address, int end_address, enum mem_content_type type);
 enum mem_content_type mem_get_content_type (int address);
+
+int io_simulation(int pri);
+
+struct host_callback_struct;
+void init_io(void);
+void sci_open_pty(struct host_callback_struct *callback);
+void sci_open_net(struct host_callback_struct *callback, int port);
+void sci_close(void);
+void show_memmap(struct host_callback_struct *callback);

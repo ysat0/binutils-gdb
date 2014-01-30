@@ -170,7 +170,7 @@ rx_load (bfd *prog, host_callback *callback)
   if (strcmp (bfd_get_target (prog), "srec") == 0
       || regs.r_pc == 0)
     {
-      regs.r_pc = mem_get_si (0xfffffffc);
+      regs.r_pc = mem_get_si (0xfffffffc, 0);
       heaptop = heapbottom = 0;
     }
 
