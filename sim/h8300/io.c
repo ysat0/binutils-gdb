@@ -383,7 +383,7 @@ h8300s_timer16(SIM_DESC sd, unsigned int cycles_diff)
   int tm, cnt, pcnt, gr, pulse;
   for (pcnt = 0; pcnt < 4; pcnt++) {
     prescale[pcnt] -= cycles_diff;
-    pulse = -prescale[pcnt] / prescale_div[cnt];
+    pulse = -prescale[pcnt] / prescale_div[pcnt];
     if (prescale[pcnt]<=0) 
     {
       /* input time pulse */
