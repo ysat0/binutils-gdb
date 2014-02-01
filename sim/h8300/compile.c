@@ -40,6 +40,7 @@
 #endif
 
 int debug;
+int h8300_interrupt_mode;
 
 host_callback *sim_callback;
 
@@ -577,10 +578,8 @@ lvalue (SIM_DESC sd, int x, int rn, unsigned int *val)
 static int
 cmdline_location()
 {
-  if (h8300smode && !h8300_normal_mode)
-    return 0xffff00L;
-  else if (h8300hmode && !h8300_normal_mode)
-    return 0x2ff00L;
+  if ((h8300hmode || h8300smode) && !h8300_normal_mode)
+    return 0xff0000L;
   else
     return 0xff00L;
 }
@@ -1252,6 +1251,37 @@ compile (SIM_DESC sd, int pc)
   h8_set_cache_idx (sd, pc, idx);
 }
 
+enum mem_access_type {MEM_RL,MEM_RW,MEM_RB,MEM_WL,MEM_WW,MEM_WB};
+
+struct memlog {
+  unsigned long pc;
+  unsigned long addr;
+  unsigned long data;
+  enum mem_access_type type;
+};
+
+static struct memlog *memlog_buffer;
+static int memlogtail;
+static int memlogsize;
+
+static add_memlog(unsigned long pc, unsigned long addr, 
+		  enum mem_access_type type, unsigned long data)
+{
+  if (memlogsize == memlogtail) {
+         memlog_buffer = (struct memlog *)realloc(memlog_buffer, 
+                                                 (memlogsize * sizeof(struct memlog) + 65536));
+         memlogsize += 65536 / sizeof(struct memlog);
+  }
+  if (memlog_buffer) {
+    memlog_buffer[memlogtail].pc = pc;
+    memlog_buffer[memlogtail].addr = addr;
+    memlog_buffer[memlogtail].type = type;
+    memlog_buffer[memlogtail].data = data;
+    memlogtail++;
+  }
+}
+
+static int pc;
 
 static unsigned char  *breg[32];
 static unsigned short *wreg[16];
@@ -1264,33 +1294,46 @@ static unsigned int   *lreg[18];
 #define GET_L_REG(X)     h8_get_reg (sd, X)
 #define SET_L_REG(X, Y)  h8_set_reg (sd, X, Y)
 
-#define GET_MEMORY_L(X) \
-  ((X) < memory_size \
-   ? ((h8_get_memory (sd, (X)+0) << 24) | (h8_get_memory (sd, (X)+1) << 16)  \
-    | (h8_get_memory (sd, (X)+2) <<  8) | (h8_get_memory (sd, (X)+3) <<  0)) \
-   : ((h8_get_eightbit (sd, ((X)+0) & 0xff) << 24) \
-    | (h8_get_eightbit (sd, ((X)+1) & 0xff) << 16) \
-    | (h8_get_eightbit (sd, ((X)+2) & 0xff) <<  8) \
-    | (h8_get_eightbit (sd, ((X)+3) & 0xff) <<  0)))
+#define GET_MEMORY_L(X) _get_memory_l(sd, X)
 
-#define GET_MEMORY_W(X) \
-  ((X) < memory_size \
-   ? ((h8_get_memory   (sd, (X)+0) << 8) \
-    | (h8_get_memory   (sd, (X)+1) << 0)) \
-   : ((h8_get_eightbit (sd, ((X)+0) & 0xff) << 8) \
-    | (h8_get_eightbit (sd, ((X)+1) & 0xff) << 0)))
+static inline unsigned long _get_memory_l(SIM_DESC sd, unsigned long addr)
+{
+  unsigned long result;
+  result =
+    ((h8_get_memory (sd, addr+0) << 24) | (h8_get_memory (sd, addr+1) << 16)
+     | (h8_get_memory (sd, addr+2) <<  8) | (h8_get_memory (sd, addr+3) <<  0));
+  add_memlog(pc, addr, MEM_RL, result);
+  return result;
+}
 
+#define GET_MEMORY_W(X) _get_memory_w(sd, X)
 
-#define GET_MEMORY_B(X) \
-  ((X) < memory_size ? (h8_get_memory   (sd, (X))) \
-                     : (h8_get_eightbit (sd, (X) & 0xff)))
+static inline unsigned short _get_memory_w(SIM_DESC sd, unsigned long addr)
+{
+  unsigned short result;
+  result =
+     (h8_get_memory (sd, addr+0) <<  8) | (h8_get_memory (sd, addr+1) <<  0);
+  add_memlog(pc, addr, MEM_RW, result);
+  return result;
+}
 
+#define GET_MEMORY_B(X) _get_memory_b(sd, X)
+
+static inline unsigned short _get_memory_b(SIM_DESC sd, unsigned long addr)
+{
+  unsigned short result;
+  result = h8_get_memory (sd, addr+0);
+  add_memlog(pc, addr, MEM_RB, result);
+  return result;
+}
+ 
 #define SET_MEMORY_L(X, Y)  \
 {  register unsigned char *_p; register int __y = (Y); \
    _p = ((X) < memory_size ? h8_get_memory_buf   (sd) +  (X) : \
                              h8_get_eightbit_buf (sd) + ((X) & 0xff)); \
    _p[0] = __y >> 24; _p[1] = __y >> 16; \
    _p[2] = __y >>  8; _p[3] = __y >>  0; \
+   add_memlog(pc, X, MEM_WL, Y);	 \
 }
 
 #define SET_MEMORY_W(X, Y) \
@@ -1298,11 +1341,13 @@ static unsigned int   *lreg[18];
    _p = ((X) < memory_size ? h8_get_memory_buf   (sd) +  (X) : \
                              h8_get_eightbit_buf (sd) + ((X) & 0xff)); \
    _p[0] = __y >> 8; _p[1] = __y; \
+   add_memlog(pc, X, MEM_WW, Y); \
 }
 
 #define SET_MEMORY_B(X, Y) \
   ((X) < memory_size ? (h8_set_memory   (sd, (X), (Y))) \
-                     : (h8_set_eightbit (sd, (X) & 0xff, (Y))))
+		     : (h8_set_eightbit (sd, (X) & 0xff, (Y))));	\
+   add_memlog(pc, X, MEM_WB, Y)
 
 /* Simulate a memory fetch.
    Return 0 for success, -1 for failure.
@@ -1791,15 +1836,13 @@ init_pointers (SIM_DESC sd)
 	free (h8_get_memory_buf (sd));
       if (h8_get_cache_idx_buf (sd))
 	free (h8_get_cache_idx_buf (sd));
-      if (h8_get_eightbit_buf (sd))
-	free (h8_get_eightbit_buf (sd));
 
       h8_set_memory_buf (sd, (unsigned char *) 
 			 calloc (sizeof (char), memory_size));
       h8_set_cache_idx_buf (sd, (unsigned short *) 
 			    calloc (sizeof (short), memory_size));
       sd->memory_size = memory_size;
-      h8_set_eightbit_buf (sd, (unsigned char *) calloc (sizeof (char), 256));
+      h8_set_eightbit_buf (sd, (unsigned char *)h8_get_memory_buf(sd) + 0xffff00);
 
       h8_set_mask (sd, memory_size - 1);
 
@@ -1894,6 +1937,51 @@ case O (name, SB):				\
   goto next;					\
 }
 
+static unsigned long *trace_buffer;
+static unsigned long tracesize;
+static unsigned long tracetail;
+
+static void add_trace(unsigned long pc)
+{
+  if (tracesize == tracetail) {
+         trace_buffer = (unsigned long *)realloc(trace_buffer, 
+                                                 (tracesize * sizeof(unsigned long) + 65536));
+    tracesize += 65536 / sizeof(unsigned long);
+  }
+  if (trace_buffer)
+    trace_buffer[tracetail++] = pc;
+}
+
+static void init_history(void)
+{
+  if(trace_buffer)
+    free(trace_buffer);
+  tracesize = tracetail = 0;
+  if(memlog_buffer)
+    free(memlog_buffer);
+  memlogsize = memlogtail = 0;
+}
+
+static int intlevel(SIM_DESC sd)
+{
+  if(h8300smode && (h8300_interrupt_mode == 2)) {
+    return  h8_get_exr (sd) << 8;
+  } else if (h8300_interrupt_mode == 1) {
+    switch((h8_get_ccr (sd) >> 6) & 3) {
+    case 0:
+      return 0;
+    case 2:
+      return 1 << 8;
+    case 3:
+      return 0x100 << 8;
+    }
+  } else {
+    return h8_get_ccr (sd) & 0x80?0x100 << 8:0;
+  }
+}
+
+int iosimulation(SIM_DESC, int);
+
 void
 sim_resume (SIM_DESC sd, int step, int siggnal)
 {
@@ -1908,12 +1996,12 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
   int rd;
   int ea;
   int bit;
-  int pc;
   int c, nz, v, n, u, h, ui, intMaskBit;
   int trace, intMask;
   int oldmask;
   enum sim_stop reason;
   int sigrc;
+  int vector;
 
   init_pointers (sd);
 
@@ -1941,7 +2029,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
   /* Get Status Register (flags).  */
   GETSR (sd);
 
-  if (h8300smode)	/* Get exr.  */
+  if (h8300smode && h8300_interrupt_mode)	/* Get exr.  */
     {
       trace = (h8_get_exr (sd) >> 7) & 1;
       intMask = h8_get_exr (sd) & 7;
@@ -1956,6 +2044,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
       decoded_inst *code;
 
     top:
+      add_trace(pc);
       cidx = h8_get_cache_idx (sd, pc);
       if (cidx == (unsigned short) -1 ||
 	  cidx >= sd->sim_cache_size)
@@ -1976,6 +2065,47 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	{
 	  cycles += code->cycles;
 	  insts++;
+	  add_trace(pc);
+	  if ((vector = iosimulation (sd, cycles)) && 
+	      (intlevel(sd) <= (vector & 0xff00)))
+	    {
+	      unsigned int ccr;
+	      unsigned long vbr = 0;
+	      int pri = (vector & 0xff00) & 7;
+	      vector &= 0xff;
+	      BUILDSR (sd);
+	      ccr = h8_get_ccr (sd);
+	      tmp = h8_get_reg (sd, SP_REGNUM);
+	      tmp -= 4;
+	      if (h8300sxmode)
+		vbr = h8_get_vbr(sd);
+	      if (!h8300hmode || h8300_normal_mode)
+		{
+		  SET_MEMORY_W (tmp, (ccr << 8) | ccr);
+		  SET_MEMORY_W (tmp, pc);
+		  pc = GET_MEMORY_W (vbr + vector * 2) & 0xffff;
+		} 
+	      else
+		{
+		  SET_MEMORY_L (tmp, (ccr << 24) | pc);
+		  pc=GET_MEMORY_L(vbr + vector * 4) & 0xffffff;
+		}
+	      if (h8300smode && (h8300_interrupt_mode == 2))
+		{
+		  int exr;
+		  exr = h8_get_exr (sd);
+		  tmp -= 2;
+		  SET_MEMORY_W (tmp, exr << 8);
+		  exr = pri;
+		  h8_set_exr (sd, exr);
+		  intMask = pri;
+		}
+	      h8_set_reg (sd, SP_REGNUM, tmp);
+	      ccr |= (h8300_interrupt_mode == 1)?0xc0:0x80;
+	      h8_set_ccr (sd, ccr);
+	      GETSR(sd);
+	      goto end;
+	    }
 	}
 
       switch (code->opcode)
@@ -5038,15 +5168,13 @@ sim_load (SIM_DESC sd, char *prog, bfd *abfd, int from_tty)
     free (h8_get_memory_buf (sd));
   if (h8_get_cache_idx_buf (sd))
     free (h8_get_cache_idx_buf (sd));
-  if (h8_get_eightbit_buf (sd))
-    free (h8_get_eightbit_buf (sd));
 
   h8_set_memory_buf (sd, (unsigned char *) 
 		     calloc (sizeof (char), memory_size));
   h8_set_cache_idx_buf (sd, (unsigned short *) 
 			calloc (sizeof (short), memory_size));
   sd->memory_size = memory_size;
-  h8_set_eightbit_buf (sd, (unsigned char *) calloc (sizeof (char), 256));
+  h8_set_eightbit_buf (sd, (unsigned char *)h8_get_memory_buf(sd) + 0xffff00);
 
   /* `msize' must be a power of two.  */
   if ((memory_size & (memory_size - 1)) != 0)
@@ -5057,6 +5185,8 @@ sim_load (SIM_DESC sd, char *prog, bfd *abfd, int from_tty)
     }
   h8_set_mask (sd, memory_size - 1);
 
+  init_history();
+  init_ioregs(sd);
   if (sim_load_file (sd, myname, sim_callback, prog, prog_bfd,
 		     sim_kind == SIM_OPEN_DEBUG,
 		     0, sim_write)
@@ -5112,4 +5242,154 @@ void
 sim_set_callbacks (struct host_callback_struct *ptr)
 {
   sim_callback = ptr;
+}
+
+static void show_trace(int lines)
+{
+  unsigned long idx;
+  idx = tracetail - lines;
+  for (; lines > 0; --lines)
+    {
+      if (trace_buffer[idx] != -1)
+	(*sim_callback->printf_filtered) (sim_callback,
+					  "0x%06x\n", trace_buffer[idx]);
+      idx++;
+    }
+  (*sim_callback->printf_filtered) (sim_callback, "\n");
+}
+
+static void save_trace(char *filename)
+{
+  FILE *fp;
+  unsigned long idx;
+  fp = fopen(filename, "w");
+  if (!fp)
+    {
+      (*sim_callback->printf_filtered) (sim_callback,
+					"save-history: file open failed.\n");
+      return ;
+    }
+  for (idx = 0; idx < tracetail; idx++)
+    fprintf(fp, "0x%06x\n", trace_buffer[idx]);
+  fclose(fp);
+}
+
+static const char *memtype_str[]={"RL","RW","RB","WL","WW","WB"};
+
+static void show_memlog(int lines)
+{
+  unsigned long idx;
+  idx = memlogtail - lines;
+  for (; lines > 0; --lines)
+    {
+      (*sim_callback->printf_filtered) (sim_callback,
+					"0x%06x 0x%06x %s %08x\n",
+					memlog_buffer[idx].pc,
+					memlog_buffer[idx].addr,
+					memtype_str[memlog_buffer[idx].type],
+					memlog_buffer[idx].data);
+      idx++;
+    }
+  (*sim_callback->printf_filtered) (sim_callback, "\n");
+}
+
+static void save_memlog(char *filename)
+{
+  FILE *fp;
+  unsigned long idx;
+  fp = fopen(filename, "w");
+  if (!fp)
+    {
+      (*sim_callback->printf_filtered) (sim_callback,
+					"save-history: file open failed.\n");
+      return ;
+    }
+  for (idx = 0; idx < memlogtail; idx++)
+    fprintf(fp, "0x%06x 0x%06x %s %08x\n",
+	    memlog_buffer[idx].pc,
+	    memlog_buffer[idx].addr,
+	    memtype_str[memlog_buffer[idx].type],
+	    memlog_buffer[idx].data);
+  fclose(fp);
+}
+
+void
+sim_do_command (SIM_DESC sd, char *cmd)
+{
+  if (cmd == NULL || *cmd == '\0')
+    cmd = "help";
+  if (strncmp(cmd, "show-trace", 10) == 0)
+    {
+      int lines = 16;
+      cmd += 10;
+      if (*cmd)
+       lines = atoi(cmd);
+      if (lines > 0)
+       show_trace(lines);
+      else
+       (*sim_callback->printf_filtered) (sim_callback,
+                                         "Invalid lines\n");
+      return;
+    }
+  else if (strncmp(cmd, "save-trace", 10) == 0)
+    {
+      cmd += 10;
+      while(isspace(*cmd))
+	cmd++;
+
+      if (*cmd)
+	save_trace(cmd);
+      else
+	(*sim_callback->printf_filtered) (sim_callback,
+					  "Invalid filename\n");
+    }
+  else if (strncmp(cmd, "show-mem", 8) == 0)
+    {
+      int lines = 16;
+      cmd += 8;
+      if (*cmd)
+	lines = atoi(cmd);
+      if (lines > 0)
+	show_memlog(lines);
+      else
+	(*sim_callback->printf_filtered) (sim_callback,
+					  "Invalid lines\n");
+      return;
+    }
+  else if (strncmp(cmd, "save-mem", 8) == 0)
+    {
+      cmd += 8;
+      while(isspace(*cmd))
+       cmd++;
+      if (*cmd)
+       save_memlog(cmd);
+      else
+       (*sim_callback->printf_filtered) (sim_callback,
+                                         "Invalid filename\n");
+    }
+  else if (strncmp (cmd, "sci", 3) == 0)
+    {
+      cmd += 3;
+      while(isspace(*cmd)) cmd++;
+      if (strncmp (cmd, "pty", 3) == 0)
+	sci_open_pty(sim_callback);
+      else if (strncmp(cmd, "net", 3) == 0)
+	{
+	  cmd += 3;
+	  while(isspace(*cmd)) cmd++;
+	  sci_open_net(sim_callback, atoi(cmd));
+	}
+    }
+  else if (strncmp(cmd, "help", 4) == 0)
+    (*sim_callback->printf_filtered) (sim_callback,
+                                     "List of H8/300 Simulator commands\n\n"
+                                     "show-history <n> -- show trace history\n"
+                                     "save-history filename -- save trace history\n"
+				     "show-mem <n> -- show memory access log\n"
+				     "save-mem filename -- save memory access log\n"
+				     "sci [pty|net port] -- open sci port\n"
+	    );
+  else
+    (*sim_callback->printf_filtered) (sim_callback,
+				      "Error: Unknown \"%s\" command\n", cmd);
 }
