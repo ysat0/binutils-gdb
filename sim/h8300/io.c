@@ -67,9 +67,7 @@ struct int_list_t {
   unsigned char ier_mask;
 };
 
-static int scifd[MAX_SCI_CH];
-static struct termios old_attr[MAX_SCI_CH];
-static unsigned char *sci_base;
+static const unsigned char *sci_base;
 static unsigned char ssr[MAX_SCI_CH];
 static const unsigned char *timer8_base;
 static const struct int_list_t *int_table;
@@ -78,9 +76,9 @@ static const unsigned char h8300h_timer8_base[] = {0x80,0x81,0x90,0x91,0};
 static const unsigned char h8300s_timer8_base[] = {0xb0,0xb1,0};
 static const unsigned int tpubase[] = {0xffffd0,0xffffe0,0xfffff0,
 				       0xfffe80,0xfffe90,0xfffea0};
-static const h8300h_sci_base[] = {0xb0,0xb8,0xc0};
-static const h8300s_sci_base[] = {0x78,0x80,0x88};
-static const h8300sx_sci_base[] = {0x80,0x88,0x60};
+static const unsigned char h8300h_sci_base[] = {0xb0,0xb8,0xc0};
+static const unsigned char h8300s_sci_base[] = {0x78,0x80,0x88};
+static const unsigned char h8300sx_sci_base[] = {0x80,0x88,0x60};
 
 extern int h8300hmode;
 extern int h8300smode;
@@ -541,7 +539,7 @@ static void
 sci_send_data(int ch, int txd)
 {
   char dt = txd;
-  if (sci_port[ch].fd > 0) {
+  if (sci_port[ch].fd >= 0) {
     if (write(sci_port[ch].fd, &dt, 1) > 0)
       fsync(sci_port[ch].fd);
     else
@@ -602,7 +600,7 @@ int
 sci_rcv_data(int ch, int *rxd)
 {
   unsigned char rd;
-  if (sci_port[ch].fd > 0)
+  if (sci_port[ch].fd >= 0)
     {
       if( read(sci_port[ch].fd, &rd , 1) > 0 )
 	{
@@ -975,16 +973,16 @@ static char *openpty(int ch)
     ptyname[5]='t';
   }
   if (fd >= 0) {
-    scifd[ch]=fd;
-    tcgetattr(scifd[ch],&attr);
-    memcpy(&old_attr[ch],&attr,sizeof(struct termios));
-    attr.c_lflag&=~ICANON;
-    attr.c_cc[VMIN]=0;
-    attr.c_cc[VTIME]=0;
-    tcsetattr(scifd[ch],TCSAFLUSH,&attr);
+    sci_port[ch].fd = fd;
+    tcgetattr(fd, &attr);
+    memcpy(&sci_port[ch].old_attr, &attr, sizeof(struct termios));
+    attr.c_lflag &= ~ICANON;
+    attr.c_cc[VMIN] = 0;
+    attr.c_cc[VTIME] =0;
+    tcsetattr(fd, TCSAFLUSH, &attr);
     return ptyname;
   } else {
-    scifd[ch] = -1;
+    sci_port[ch].fd = -1;
     return NULL;
   }
 }
