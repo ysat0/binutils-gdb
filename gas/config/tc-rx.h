@@ -101,9 +101,15 @@ extern void rx_handle_align (fragS *);
 extern void rx_elf_final_processing (void);
 
 extern bfd_boolean rx_use_conventional_section_names;
+#ifndef TE_LINUX
 #define TEXT_SECTION_NAME	(rx_use_conventional_section_names ? ".text" : "P")
 #define DATA_SECTION_NAME	(rx_use_conventional_section_names ? ".data" : "D_1")
 #define BSS_SECTION_NAME	(rx_use_conventional_section_names ? ".bss"  : "B_1")
+#else
+#define TEXT_SECTION_NAME	".text"
+#define DATA_SECTION_NAME	".data"
+#define BSS_SECTION_NAME	".bss"
+#endif
 
 #define md_start_line_hook rx_start_line
 extern void rx_start_line (void);
