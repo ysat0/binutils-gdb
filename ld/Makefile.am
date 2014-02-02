@@ -254,6 +254,7 @@ ALL_EMULATION_SOURCES = \
 	eelf32ppcwindiss.c \
 	eelf32rl78.c \
 	eelf32rx.c \
+	eelf32rx_linux.c \
 	eelf32tilegx.c \
 	eelf32tilegx_be.c \
 	eelf32tilepro.c \
@@ -1178,6 +1179,9 @@ eelf32rl78.c: $(srcdir)/emulparams/elf32rl78.sh \
 eelf32rx.c: $(srcdir)/emulparams/elf32rx.sh \
   $(ELF_DEPS) $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
 	${GENSCRIPTS} elf32rx "$(tdir_elf32rx)"
+eelf32rx_linux.c: $(srcdir)/emulparams/elf32rx_linux.sh \
+  $(ELF_DEPS) $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
+	${GENSCRIPTS} elf32rx_linux "$(tdir_elf32rx)"
 eelf32tilegx.c: $(srcdir)/emulparams/elf32tilegx.sh \
   $(ELF_DEPS) $(srcdir)/emultempl/needrelax.em \
   $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
