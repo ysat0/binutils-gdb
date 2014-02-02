@@ -946,7 +946,7 @@ h8300_register_name (struct gdbarch *gdbarch, int regno)
      type is selected.  */
   static char *register_names[] = {
     "r0", "r1", "r2", "r3", "r4", "r5", "r6",
-    "sp", "", "pc", "cycles", "tick", "inst",
+    "sp", "ccr", "pc", "cycles", "tick", "inst",
     "ccr",			/* pseudo register */
   };
   if (regno < 0
@@ -963,7 +963,7 @@ h8300s_register_name (struct gdbarch *gdbarch, int regno)
 {
   static char *register_names[] = {
     "er0", "er1", "er2", "er3", "er4", "er5", "er6",
-    "sp", "", "pc", "cycles", "", "tick", "inst",
+    "sp", "ccr", "pc", "cycles", "exr", "tick", "inst",
     "mach", "macl",
     "ccr", "exr"		/* pseudo registers */
   };
@@ -981,7 +981,7 @@ h8300sx_register_name (struct gdbarch *gdbarch, int regno)
 {
   static char *register_names[] = {
     "er0", "er1", "er2", "er3", "er4", "er5", "er6",
-    "sp", "", "pc", "cycles", "", "tick", "inst",
+    "sp", "ccr", "pc", "cycles", "exr", "tick", "inst",
     "mach", "macl", "sbr", "vbr",
     "ccr", "exr"		/* pseudo registers */
   };
@@ -1136,9 +1136,9 @@ h8300_register_type (struct gdbarch *gdbarch, int regno)
 	case E_FP_REGNUM:
 	  return builtin_type (gdbarch)->builtin_data_ptr;
 	default:
-	  if (regno == E_PSEUDO_CCR_REGNUM (gdbarch))
+	  if (regno == E_PSEUDO_CCR_REGNUM (gdbarch) || regno == E_CCR_REGNUM)
 	    return builtin_type (gdbarch)->builtin_uint8;
-	  else if (regno == E_PSEUDO_EXR_REGNUM (gdbarch))
+	  else if (regno == E_PSEUDO_EXR_REGNUM (gdbarch)  || regno == E_EXR_REGNUM)
 	    return builtin_type (gdbarch)->builtin_uint8;
 	  else if (is_h8300hmode (gdbarch))
 	    return builtin_type (gdbarch)->builtin_int32;
