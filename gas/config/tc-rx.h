@@ -35,7 +35,7 @@ extern int target_big_endian;
 #ifndef TE_LINUX
 #define TARGET_FORMAT (target_big_endian ? "elf32-rx-be" : "elf32-rx-le")
 #else
-#define TARGET_FORMAT  "elf32-rx-linux"
+#define TARGET_FORMAT  "elf32-rx-le"
 #endif
 
 /* We don't need to handle .word strangely.  */

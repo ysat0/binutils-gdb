@@ -1321,8 +1321,8 @@ case "${targ}" in
     targ_selvecs="bfd_elf32_rx_be_vec bfd_elf32_rx_le_vec bfd_elf32_rx_be_ns_vec"
     ;;
   rx-*-linux*)
-    targ_defvec=bfd_elf32_rx_le_linux_vec
-    targ_selvecs="bfd_elf32_rx_le_linux_vec"
+    targ_defvec=bfd_elf32_rx_le_vec
+    targ_selvecs="bfd_elf32_rx_le_vec"
     ;;
 
   s390-*-linux*)
