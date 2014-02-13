@@ -55,6 +55,7 @@
 #include "probe.h"
 #include "ctf.h"
 #include "filestuff.h"
+#include "rsp-low.h"
 
 /* readline include files */
 #include "readline/readline.h"
@@ -3091,7 +3092,7 @@ encode_source_string (int tpnum, ULONGEST addr,
 	   srctype, 0, (int) strlen (src));
   if (strlen (buf) + strlen (src) * 2 >= buf_size)
     error (_("Source string too long for buffer"));
-  bin2hex ((gdb_byte *) src, buf + strlen (buf), 0);
+  bin2hex ((gdb_byte *) src, buf + strlen (buf), strlen (src));
   return -1;
 }
 
@@ -3210,7 +3211,7 @@ tfile_write_status (struct trace_file_writer *self,
     {
       char *buf = (char *) alloca (strlen (ts->stop_desc) * 2 + 1);
 
-      bin2hex ((gdb_byte *) ts->stop_desc, buf, 0);
+      bin2hex ((gdb_byte *) ts->stop_desc, buf, strlen (ts->stop_desc));
       fprintf (writer->fp, ":%s", buf);
     }
   fprintf (writer->fp, ":%x", ts->stopping_tracepoint);
@@ -3240,14 +3241,14 @@ tfile_write_status (struct trace_file_writer *self,
     {
       char *buf = (char *) alloca (strlen (ts->notes) * 2 + 1);
 
-      bin2hex ((gdb_byte *) ts->notes, buf, 0);
+      bin2hex ((gdb_byte *) ts->notes, buf, strlen (ts->notes));
       fprintf (writer->fp, ";notes:%s", buf);
     }
   if (ts->user_name != NULL)
     {
       char *buf = (char *) alloca (strlen (ts->user_name) * 2 + 1);
 
-      bin2hex ((gdb_byte *) ts->user_name, buf, 0);
+      bin2hex ((gdb_byte *) ts->user_name, buf, strlen (ts->user_name));
       fprintf (writer->fp, ";username:%s", buf);
     }
   fprintf (writer->fp, "\n");
@@ -3267,7 +3268,7 @@ tfile_write_uploaded_tsv (struct trace_file_writer *self,
   if (utsv->name)
     {
       buf = (char *) xmalloc (strlen (utsv->name) * 2 + 1);
-      bin2hex ((gdb_byte *) (utsv->name), buf, 0);
+      bin2hex ((gdb_byte *) (utsv->name), buf, strlen (utsv->name));
     }
 
   fprintf (writer->fp, "tsv %x:%s:%x:%s\n",
@@ -5113,14 +5114,15 @@ tfile_fetch_registers (struct target_ops *ops,
     }
 }
 
-static LONGEST
+static enum target_xfer_status
 tfile_xfer_partial (struct target_ops *ops, enum target_object object,
 		    const char *annex, gdb_byte *readbuf,
-		    const gdb_byte *writebuf, ULONGEST offset, ULONGEST len)
+		    const gdb_byte *writebuf, ULONGEST offset, ULONGEST len,
+		    ULONGEST *xfered_len)
 {
   /* We're only doing regular memory for now.  */
   if (object != TARGET_OBJECT_MEMORY)
-    return -1;
+    return TARGET_XFER_E_IO;
 
   if (readbuf == NULL)
     error (_("tfile_xfer_partial: trace file is read-only"));
@@ -5157,7 +5159,8 @@ tfile_xfer_partial (struct target_ops *ops, enum target_object object,
 	      if (maddr != offset)
 	        lseek (trace_fd, offset - maddr, SEEK_CUR);
 	      tfile_read (readbuf, amt);
-	      return amt;
+	      *xfered_len = amt;
+	      return TARGET_XFER_OK;
 	    }
 
 	  /* Skip over this block.  */
@@ -5191,15 +5194,15 @@ tfile_xfer_partial (struct target_ops *ops, enum target_object object,
 	      if (amt > len)
 		amt = len;
 
-	      amt = bfd_get_section_contents (exec_bfd, s,
-					      readbuf, offset - vma, amt);
-	      return amt;
+	      *xfered_len = bfd_get_section_contents (exec_bfd, s,
+						      readbuf, offset - vma, amt);
+	      return TARGET_XFER_OK;
 	    }
 	}
     }
 
   /* Indicate failure to find the requested memory block.  */
-  return -1;
+  return TARGET_XFER_E_IO;
 }
 
 /* Iterate through the blocks of a trace frame, looking for a 'V'
