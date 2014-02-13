@@ -1009,6 +1009,7 @@ sci(unsigned int cycles_diff)
 	{
 	  sci_send_data(ch,TDR(ch));
 	  st->isr &= ~SCI_TEI;
+	  st->ssr &= ~0x04;
 	  /* TSR shift time */
 	  st->tx_end_time = 1;
 	  st->txstate = 1;
@@ -1022,6 +1023,7 @@ sci(unsigned int cycles_diff)
 	  if (!(st->isr & SCI_TXI))
 	    {
 	      st->isr |= SCI_TXI;
+	      st->ssr |= 0x80;
 	      st->tx_end_time = sci_complete_time(scibase, ch);
 	      st->txstate = 0;
 	    } 
@@ -1040,6 +1042,8 @@ sci(unsigned int cycles_diff)
 	    if(get_rw_flag(0x00088245 + ch * 8) == mem_none)
 	      {
 		st->isr |= SCI_ERI;
+		set_rw_flag(0x00088245 + ch * 8, mem_none);
+		st->ssr |= 0x20;
 	      }
 	    else
 	  /* Rx ok */
@@ -1047,6 +1051,7 @@ sci(unsigned int cycles_diff)
 		RDR(ch)=data;
 		st->isr |= SCI_RXI;
 		set_rw_flag(0x00088245 + ch * 8, mem_none);
+		st->ssr |= 0x40;
 	      }
 	    /* RSR shift time */
 	    st->rx_end_time = sci_complete_time(scibase, ch);
