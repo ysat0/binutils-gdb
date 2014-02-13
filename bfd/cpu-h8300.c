@@ -107,6 +107,10 @@ compatible (const bfd_arch_info_type *in, const bfd_arch_info_type *out)
     return in;
   if (in->mach == bfd_mach_h8300sn && out->mach == bfd_mach_h8300sxn)
     return out;
+  if (in->mach == bfd_mach_h8300s && out->mach == bfd_mach_h8300h)
+    return in;
+  if (in->mach == bfd_mach_h8300h && out->mach == bfd_mach_h8300s)
+    return out;
   /* It's really not a good idea to mix and match modes.  */
   if (in->mach != out->mach)
     return 0;
