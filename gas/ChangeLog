@@ -1,3 +1,24 @@
+2014-02-12  Ilya Tocar  <ilya.tocar@intel.com>
+
+	* config/tc-i386.c (cpu_arch): Add .clflushopt, .xsavec, .xsaves.
+	* doc/c-i386.texi: Document .xsavec/xsavec/.xsaves/xsaves/
+	clflushopt/.clfushopt.
+
+2014-02-10  Alan Modra  <amodra@gmail.com>
+
+	* po/POTFILES.in: Regenerate.
+	* po/gas.pot: Regenerate.
+
+2014-02-03  Sandra Loosemore  <sandra@codesourcery.com>
+
+	* config/tc-nios2.c (md_apply_fix): Test for new relocs.
+	(nios2_special_reloc): Add %call_lo, %call_hiadj, %got_lo,
+	%got_hiadj relocation operators.  Sort table and add comment
+	to explain ordering.
+	(nios2_fix_adjustable): Test for new relocs.
+	* doc/c-nios2.texi (Nios II Relocations): Document new relocation
+	operators.
+
 2014-01-30  Sandra Loosemore  <sandra@codesourcery.com>
 
 	* config/tc-nios2.c (md_apply_fix): Handle BFD_RELOC_NIOS2_CALL26_NOAT.

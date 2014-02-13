@@ -3973,10 +3973,11 @@ wait_again:
 /* Perform a partial transfer to/from the specified object.  For
    memory transfers, fall back to the old memory xfer functions.  */
 
-static LONGEST
+static enum target_xfer_status
 procfs_xfer_partial (struct target_ops *ops, enum target_object object,
 		     const char *annex, gdb_byte *readbuf,
-		     const gdb_byte *writebuf, ULONGEST offset, ULONGEST len)
+		     const gdb_byte *writebuf, ULONGEST offset, ULONGEST len,
+		     ULONGEST *xfered_len)
 {
   switch (object)
     {
@@ -3987,19 +3988,20 @@ procfs_xfer_partial (struct target_ops *ops, enum target_object object,
       if (writebuf)
 	return (*ops->deprecated_xfer_memory) (offset, (gdb_byte *) writebuf,
 					       len, 1/*write*/, NULL, ops);
-      return -1;
+      return TARGET_XFER_E_IO;
 
 #ifdef NEW_PROC_API
     case TARGET_OBJECT_AUXV:
       return memory_xfer_auxv (ops, object, annex, readbuf, writebuf,
-			       offset, len);
+			       offset, len, xfered_len);
 #endif
 
     default:
       if (ops->beneath != NULL)
 	return ops->beneath->to_xfer_partial (ops->beneath, object, annex,
-					      readbuf, writebuf, offset, len);
-      return -1;
+					      readbuf, writebuf, offset, len,
+					      xfered_len);
+      return TARGET_XFER_E_IO;
     }
 }
 

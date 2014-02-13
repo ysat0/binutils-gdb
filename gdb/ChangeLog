@@ -1,3 +1,883 @@
+2014-02-12  Tom Tromey  <tromey@redhat.com>
+
+	* common/rsp-low.c: Update comments.
+	* common/rsp-low.h: Update comments.
+
+2014-02-12  Tom Tromey  <tromey@redhat.com>
+
+	* common/rsp-low.c (convert_ascii_to_int): Remove.
+	* common/rsp-low.h (convert_ascii_to_int): Don't declare.
+
+2014-02-12  Tom Tromey  <tromey@redhat.com>
+
+	* common/rsp-low.h (unhexify): Don't declare.
+	* common/rsp-low.c (unhexify): Remove.
+
+2014-02-12  Tom Tromey  <tromey@redhat.com>
+
+	* common/rsp-low.h (convert_int_to_ascii): Don't declare.
+	* common/rsp-low.c (convert_int_to_ascii): Remove.
+
+2014-02-12  Tom Tromey  <tromey@redhat.com>
+
+	* common/rsp-low.h (hexify): Don't declare.
+	* common/rsp-low.c (hexify): Remove.
+
+2014-02-12  Tom Tromey  <tromey@redhat.com>
+
+	* common/rsp-low.c (hexify): Never take strlen of argument.
+
+2014-02-12  Tom Tromey  <tromey@redhat.com>
+
+	* common/rsp-low.c (bin2hex): Never take strlen of argument.
+	* remote.c (extended_remote_run, remote_rcmd)
+	(remote_download_trace_state_variable, remote_save_trace_data)
+	(remote_set_trace_notes): Update.
+	* tracepoint.c (encode_source_string, tfile_write_status)
+	(tfile_write_uploaded_tsv): Update.
+
+2014-02-12  Tom Tromey  <tromey@redhat.com>
+
+	* tracepoint.c: Include rsp-low.h.
+	* remote.h (hex2bin, bin2hex, unpack_varlen_hex): Don't declare.
+	* remote.c: Include rsp-low.h.
+	(hexchars, ishex, unpack_varlen_hex, pack_nibble, pack_hex_byte)
+	(fromhex, hex2bin, tohex, bin2hex, remote_escape_output)
+	(remote_unescape_input): Move to common/rsp-low.c.
+	* common/rsp-low.h: New file.
+	* common/rsp-low.c: New file.
+	* Makefile.in (SFILES): Add common/rsp-low.c.
+	(HFILES_NO_SRCDIR): Add common/rsp-low.h.
+	(COMMON_OBS): Add rsp-low.o.
+	(rsp-low.o): New target.
+
+2014-02-12  Tom Tromey  <tromey@redhat.com>
+
+	* utils.h: Include print-utils.h.
+	(host_address_to_string, plongest, pulongest, phex, phex_nz)
+	(int_string, core_addr_to_string, core_addr_to_string_nz)
+	(hex_string, hex_string_custom): Don't declare.
+	* utils.c (NUMCELLS, CELLSIZE, get_cell, decimal2str, pulongest)
+	(plongest, thirty_two, phex, phex_nz, octal2str, hex_string)
+	(hex_string_custom, int_string, core_addr_to_string)
+	(core_addr_to_string_nz, host_address_to_string): Move to
+	common/print-utils.c.
+	* common/print-utils.h: New file.
+	* common/print-utils.c: New file
+	* Makefile.in (SFILES): Add common/print-utils.c.
+	(HFILES_NO_SRCDIR): Add common/print-utils.h.
+	(COMMON_OBS): Add print-utils.o.
+	(print-utils.o): New target.
+
+2014-02-12  Tom Tromey  <tromey@redhat.com>
+
+	* nios2-tdep.c (nios2_stub_frame_base_address): Remove.
+
+2014-02-12  Mark Kettenis  <kettenis@gnu.org>
+
+	* sparc64obsd-tdep.c (sparc64obsd_init_abi): Call obsd_init_abi.
+
+2014-02-12  Mark Kettenis  <kettenis@gnu.org>
+
+	* inf-ptrace.c (inf_ptrace_xfer_partial): Return TARGET_XFER_EOF
+	if a PT_IO ptrace request returns sucessfully but indicates that 0
+	bytes were transferred.
+
+2014-02-12  Pedro Alves  <palves@redhat.com>
+	    Kevin Buettner <kevinb@redhat.com>
+
+	* gnu-v3-abi.c (build_gdb_vtable_type): Return a type marked with
+	TYPE_INSTANCE_FLAG_CODE_SPACE.
+
+2014-02-12  Pedro Alves  <palves@redhat.com>
+
+	* h8300-tdep.c (pseudo_from_raw_register)
+	(raw_from_pseudo_register): New functions.
+	(h8300_pseudo_register_read, h8300_pseudo_register_write): Use
+	them.
+
+2014-02-12  Pedro Alves  <palves@redhat.com>
+
+	* h8300-tdep.c (h8300_register_sim_regno): New function.
+	(h8300_gdbarch_init): Install h8300_register_sim_regno as
+	gdbarch_register_sim_regno hook.
+
+2014-02-12  Sanimir Agovic  <sanimir.agovic@intel.com>
+
+	* nios2-tdep.c (nios2_stub_frame_base): Remove global.
+
+2014-02-12  Sanimir Agovic  <sanimir.agovic@intel.com>
+
+	* tic6x-tdep.c (tic6x_gdbarch_init): Call frame_base_set_default.
+
+2014-02-12  Mark Kettenis  <kettenis@gnu.org>
+
+	* obsd-tdep.h (obsd_init_abi): New prototype.
+	* obsd-tdep.c: Define enum with OpenBSD signal numbers.
+	(obsd_gdb_signal_from_target, obsd_gdb_signal_to_target)
+	(obsd_init_abi): New functions.
+	* i386obsd-tdep.c: Include "obsd-tdep.h".
+	(i386obsd_init_abi): Call obsd_init_abi.
+	* amd64obsd-tdep.c: Include "obsd-tdep.h".
+	(amd64obsd_init_abi): Call obsd_init_abi.
+	* configure.tgt (i[34567]86-*-openbsd*, x86_64-*-openbsd*): Add
+	obsd-tdep.c to gdb_target_obs.
+
+2014-02-11  Jose E. Marchesi  <jose.marchesi@oracle.com>
+
+        * sparc64-tdep.c (sparc64_store_arguments): Do not align complex
+        double float arguments to 16-byte in the argument slots.
+
+2014-02-11  Doug Evans  <xdje42@gmail.com>
+
+	* configure.ac: Don't crash if pkg-config is not found and guile
+	wasn't explicitly requested.  Use AC_MSG_ERROR instead of AC_ERROR
+	in guile checks.
+	* configure: Regenerate.
+
+2014-02-11  Yao Qi  <yao@codesourcery.com>
+
+	* aix-thread.c (aix_thread_xfer_partial): Update comments.
+	* auxv.c (procfs_xfer_auxv, memory_xfer_auxv): Likewise.
+	* bsd-uthread.c (bsd_uthread_xfer_partial): Likewise.
+	* gnu-nat.c (gnu_xfer_memory): Likewise.
+	* inf-ptrace.c (inf_ptrace_xfer_partial):  Likewise.
+	* rs6000-nat.c (rs6000_xfer_partial): Likewise.
+	* sparc-nat.c (sparc_xfer_wcookie): Likewise.
+	* spu-linux-nat.c (spu_proc_xfer_spu): Likewise.
+
+2014-02-11  Yao Qi  <yao@codesourcery.com>
+
+	* target.h (enum target_xfer_error): Rename to ...
+	(enum target_xfer_status): ... it.  New.  All users updated.
+	(enum target_xfer_status) <TARGET_XFER_OK>, <TARGET_XFER_EOF>:
+	New.
+	(TARGET_XFER_STATUS_ERROR_P): New macro.
+	(target_xfer_error_to_string): Remove declaration.
+	(target_xfer_status_to_string): Declare.
+	(target_xfer_partial_ftype): Adjust it.
+	(struct target_ops) <to_xfer_partial>: Return
+	target_xfer_status.  Add argument xfered_len.  Update
+	comments.
+	* target.c (target_xfer_error_to_string): Rename to ...
+	(target_xfer_status_to_string): ... it.  New.  All callers
+	updated.
+	(target_read_live_memory): Likewise.  Call target_xfer_partial
+	instead of target_read.
+	(memory_xfer_live_readonly_partial): Return
+	target_xfer_status.  Add argument xfered_len.
+	(raw_memory_xfer_partial): Likewise.
+	(memory_xfer_partial_1): Likewise.
+	(memory_xfer_partial): Likewise.
+	(target_xfer_partial): Likewise.  Check *XFERED_LEN is set
+	properly.  Update debug message.
+	(default_xfer_partial, current_xfer_partial): Likewise.
+	(target_write_partial): Likewise.
+	(target_read_partial): Likewise.  All callers updated.
+	(read_whatever_is_readable): Likewise.
+	(target_write_with_progress): Likewise.
+	(target_read_alloc_1): Likewise.
+
+	* aix-thread.c (aix_thread_xfer_partial): Likewise.
+	* auxv.c (procfs_xfer_auxv): Likewise.
+	(ld_so_xfer_auxv, memory_xfer_auxv): Likewise.
+	* bfd-target.c (target_bfd_xfer_partial): Likewise.
+	* bsd-kvm.c (bsd_kvm_xfer_partial): Likewise.
+	* bsd-uthread.c (bsd_uthread_xfer_partia): Likewise.
+	* corefile.c (read_memory): Adjust.
+	* corelow.c (core_xfer_partial): Likewise.
+	* ctf.c (ctf_xfer_partial): Likewise.
+	* darwin-nat.c (darwin_read_dyld_info): Likewise.  All callers
+	updated.
+	(darwin_xfer_partial): Likewise.
+	* exec.c (section_table_xfer_memory_partial): Likewise.  All
+	callers updated.
+	(exec_xfer_partial): Likewise.
+	* exec.h (section_table_xfer_memory_partial): Update
+	declaration.
+	* gnu-nat.c (gnu_xfer_memory): Likewise.  Assert 'res' is not
+	negative.
+	(gnu_xfer_partial): Likewise.
+	* ia64-hpux-nat.c (ia64_hpux_xfer_memory_no_bs): Likewise.
+	(ia64_hpux_xfer_memory, ia64_hpux_xfer_uregs): Likewise.
+	(ia64_hpux_xfer_solib_got): Likewise.
+	* inf-ptrace.c (inf_ptrace_xfer_partial): Likewise.  Change
+	type of 'partial_len' to ULONGEST.
+	* inf-ttrace.c (inf_ttrace_xfer_partial): Likewise.
+	* linux-nat.c (linux_xfer_siginfo ): Likewise.
+	(linux_nat_xfer_partial): Likewise.
+	(linux_proc_xfer_partial, linux_xfer_partial): Likewise.
+	(linux_proc_xfer_spu, linux_nat_xfer_osdata): Likewise.
+	* monitor.c (monitor_xfer_memory): Likewise.
+	(monitor_xfer_partial): Likewise.
+	* procfs.c (procfs_xfer_partial): Likewise.
+	* record-btrace.c (record_btrace_xfer_partial): Likewise.
+	* record-full.c (record_full_xfer_partial): Likewise.
+	(record_full_core_xfer_partial): Likewise.
+	* remote-sim.c (gdbsim_xfer_memory): Likewise.
+	(gdbsim_xfer_partial): Likewise.
+	* remote.c (remote_write_bytes_aux): Likewise.  All callers
+	updated.
+	(remote_write_bytes, remote_read_bytes): Likewise.  All
+	callers updated.
+	(remote_flash_erase): Likewise.  All callers updated.
+	(remote_write_qxfer): Likewise.  All callers updated.
+	(remote_read_qxfer): Likewise.  All callers updated.
+	(remote_xfer_partial): Likewise.
+	* rs6000-nat.c (rs6000_xfer_partial): Likewise.
+	(rs6000_xfer_shared_libraries): Likewise.
+	* sol-thread.c (sol_thread_xfer_partial): Likewise.
+	(sol_thread_xfer_partial): Likewise.
+	* sparc-nat.c (sparc_xfer_wcookie): Likewise.
+	(sparc_xfer_partial): Likewise.
+	* spu-linux-nat.c (spu_proc_xfer_spu): Likewise.  All callers
+	updated.
+	(spu_xfer_partial): Likewise.
+	* spu-multiarch.c (spu_xfer_partial): Likewise.
+	* tracepoint.c (tfile_xfer_partial): Likewise.
+	* windows-nat.c (windows_xfer_memory): Likewise.
+	(windows_xfer_shared_libraries): Likewise.
+	(windows_xfer_partial): Likewise.
+	* valprint.c: Replace 'target_xfer_error' with
+	'target_xfer_status' in comments.
+
+2014-02-11  Simon Marchi  <simon.marchi@ericsson.com>  (tiny patch)
+
+	Checked in by Joel Brobecker <brobecker@adacore.com>.
+	* mi/mi-main.c (mi_cmd_data_write_memory_bytes): Fix comment.
+
+2014-02-11  Joel Brobecker  <brobecker@adacore.com>
+
+	* symfile-debug.c (debug_qf_expand_symtabs_matching): Reformat
+	function parameters.
+
+2014-02-10  Will Newton  <will.newton@linaro.org>
+
+	* elfread.c (elf_rel_plt_read): Look for a .got section if
+	looking up .got.plt fails.
+	(elf_gnu_ifunc_resolve_by_got): Call gdbarch_addr_bits_remove
+	on address passed to elf_gnu_ifunc_record_cache.
+	(elf_gnu_ifunc_resolve_addr): Likewise.
+	(elf_gnu_ifunc_resolver_return_stop): Likewise.
+
+2014-02-10  Jose E. Marchesi  <jose.marchesi@oracle.com>
+
+	* sparc-tdep.c (sparc_in_function_epilogue_p): New function.
+	(X_RETTURN): New macro.
+	* sparc-tdep.h: sparc_in_function_epilogue_p prototype.
+
+	* sparc64-tdep.c (sparc64_init_abi): Hook
+	sparc_in_function_epilogue_p.
+
+2014-02-10  Gary Benson  <gbenson@redhat.com>
+
+	* symfile-debug.c (debug_qf_expand_symtabs_matching):
+	Rename name_matcher to symbol_matcher.
+
+2014-02-10  Gary Benson  <gbenson@redhat.com>
+
+	* symfile-debug.c (debug_qf_expand_symtabs_matching):
+	Use expand_symtabs_file_matcher_ftype and
+	expand_symtabs_symbol_matcher_ftype.
+
+2014-02-10  Joel Brobecker  <brobecker@adacore.com>
+
+	* ada-lang.c (struct cache_entry, HASH_SIZE): Move definition up.
+	(struct ada_symbol_cache): New.
+	(ada_free_symbol_cache): Forward declare.
+	(struct ada_pspace_data): New.
+	(ada_pspace_data_handle): New static global.
+	(get_ada_pspace_data, ada_pspace_data_cleanup)
+	(ada_init_symbol_cache, ada_free_symbol_cache): New functions.
+	(cache_space, cache): Delete, now folded inside struct
+	ada_pspace_data.
+	(ada_get_symbol_cache): New function.
+	(ada_clear_symbol_cache, find_entry, cache_symbol): Adjust
+	implementation.
+	(_initialize_ada_language): Remove initialization of cache_space.
+	Move call to observer_attach_inferior_exit up, grouping it
+	with the other observer registrations inside this function.
+	Rename command to be more general.  Add call to
+	register_program_space_data_with_cleanup.
+
+2014-02-10  Joel Brobecker  <brobecker@adacore.com>
+
+	* ada-tasks.c (ada_tasks_new_objfile_observer): Renames
+	ada_new_objfile_observer.
+	(ada_tasks_normal_stop_observer): Renames ada_normal_stop_observer.
+	(_initialize_tasks): Update uses of ada_new_objfile_observer
+	and ada_tasks_normal_stop_observer.
+
+2014-02-10  Joel Brobecker  <brobecker@adacore.com>
+
+	* ada-lang.c (ada_evaluate_subexp): Set the type of the value
+	returned by the 'Length attribute to integer.
+
+2014-02-10  Joel Brobecker  <brobecker@adacore.com>
+
+	* ada-lang.c (_initialize_ada_language): Initialize
+	cache_space obstack.
+
+2014-02-10  Joel Brobecker  <brobecker@adacore.com>
+
+	* ada-lang.c (HASH_SIZE): New macro.
+	(struct cache_entry): New type.
+	(cache_space, cache): New static globals.
+	(ada_clear_symbol_cache, find_entry): New functions.
+	(lookup_cached_symbol, cache_symbol): Implement.
+	(ada_new_objfile_observer, ada_free_objfile_observer): New.
+	(_initialize_ada_language): Attach ada_new_objfile_observer
+	and ada_free_objfile_observer.
+
+2014-02-10  Joel Brobecker  <brobecker@adacore.com>
+
+	* ada-lang.c (ada_add_block_symbols, add_defn_to_vec)
+	(lookup_cached_symbol, ada_add_local_symbols): Add "const" to
+	struct block * parameter.
+	(ada_lookup_symbol_list_worker): Constify local variable "block".
+	Remove cast which is no longer necessary.
+
+2014-02-10  Doug Evans  <xdje42@gmail.com>
+
+	Add Guile as an extension language.
+	* NEWS: Mention Guile scripting.
+	* Makefile.in (SUBDIR_GUILE_OBS): New variable.
+	(SUBDIR_GUILE_SRCS, SUBDIR_GUILE_DEPS): New variables
+	(SUBDIR_GUILE_LDFLAGS, SUBDIR_GUILE_CFLAGS): New variables.
+	(INTERNAL_CPPFLAGS): Add GUILE_CPPFLAGS.
+	(CLIBS): Add GUILE_LIBS.
+	(install-guile): New rule.
+	(guile.o): New rule.
+	(scm-arch.o, scm-auto-load.o, scm-block.o): New rules.
+	(scm-breakpoint.o, scm-disasm.o, scm-exception.o): New rules.
+	(scm-frame.o, scm-iterator.o, scm-lazy-string.o): New rules.
+	(scm-math.o, scm-objfile.o, scm-ports.o): New rules.
+	(scm-pretty-print.o, scm-safe-call.o, scm-gsmob.o): New rules.
+	(scm-string.o, scm-symbol.o, scm-symtab.o): New rules.
+	(scm-type.o, scm-utils.o, scm-value.o): New rules.
+	* configure.ac: New option --with-guile.
+	* configure: Regenerate.
+	* config.in: Regenerate.
+	* auto-load.c: Remove #include "python/python.h".  Add #include
+	"gdb/section-scripts.h".
+	(source_section_scripts): Handle Guile scripts.
+	(_initialize_auto_load): Add name of Guile objfile script to
+	scripts-directory help text.
+	* breakpoint.c (condition_command): Tweak comment to include Scheme.
+	* breakpoint.h (gdbscm_breakpoint_object): Add forward decl.
+	(struct breakpoint): New member scm_bp_object.
+	* defs.h (enum command_control_type): New value guile_control.
+	* cli/cli-cmds.c: Remove #include "python/python.h".  Add #include
+	"extension.h".
+	(show_user): Update comment.
+	(_initialize_cli_cmds): Update help text for "show user".  Update help
+	text for max-user-call-depth.
+	* cli/cli-script.c: Remove #include "python/python.h".  Add #include
+	"extension.h".
+	(multi_line_command_p): Add guile_control.
+	(print_command_lines): Handle guile_control.
+	(execute_control_command, recurse_read_control_structure): Ditto.
+	(process_next_line): Recognize "guile" commands.
+	* disasm.c (gdb_disassemble_info): Make non-static.
+	* disasm.h: #include "dis-asm.h".
+	(struct gdbarch): Add forward decl.
+	(gdb_disassemble_info): Declare.
+	* extension.c: #include "guile/guile.h".
+	(extension_languages): Add guile.
+	(get_ext_lang_defn): Handle EXT_LANG_GDB.
+	* extension.h (enum extension_language): New value EXT_LANG_GUILE.
+	* gdbtypes.c (get_unsigned_type_max): New function.
+	(get_signed_type_minmax): New function.
+	* gdbtypes.h (get_unsigned_type_max): Declare.
+	(get_signed_type_minmax): Declare.
+	* guile/README: New file.
+	* guile/guile-internal.h: New file.
+	* guile/guile.c: New file.
+	* guile/guile.h: New file.
+	* guile/scm-arch.c: New file.
+	* guile/scm-auto-load.c: New file.
+	* guile/scm-block.c: New file.
+	* guile/scm-breakpoint.c: New file.
+	* guile/scm-disasm.c: New file.
+	* guile/scm-exception.c: New file.
+	* guile/scm-frame.c: New file.
+	* guile/scm-gsmob.c: New file.
+	* guile/scm-iterator.c: New file.
+	* guile/scm-lazy-string.c: New file.
+	* guile/scm-math.c: New file.
+	* guile/scm-objfile.c: New file.
+	* guile/scm-ports.c: New file.
+	* guile/scm-pretty-print.c: New file.
+	* guile/scm-safe-call.c: New file.
+	* guile/scm-string.c: New file.
+	* guile/scm-symbol.c: New file.
+	* guile/scm-symtab.c: New file.
+	* guile/scm-type.c: New file.
+	* guile/scm-utils.c: New file.
+	* guile/scm-value.c: New file.
+	* guile/lib/gdb.scm: New file.
+	* guile/lib/gdb/boot.scm: New file.
+	* guile/lib/gdb/experimental.scm: New file.
+	* guile/lib/gdb/init.scm: New file.
+	* guile/lib/gdb/iterator.scm: New file.
+	* guile/lib/gdb/printing.scm: New file.
+	* guile/lib/gdb/types.scm: New file.
+	* data-directory/Makefile.in (GUILE_SRCDIR): New variable.
+	(VPATH): Add $(GUILE_SRCDIR).
+	(GUILE_DIR): New variable.
+	(GUILE_INSTALL_DIR, GUILE_FILES): New variables.
+	(all): Add stamp-guile dependency.
+	(stamp-guile): New rule.
+	(clean-guile, install-guile, uninstall-guile): New rules.
+	(install-only): Add install-guile dependency.
+	(uninstall): Add uninstall-guile dependency.
+	(clean): Add clean-guile dependency.
+
+2014-02-09  Doug Evans  <xdje42@gmail.com>
+
+	Revert this patch (which I approved, mea culpa).
+
+	2014-02-08  Mark Kettenis  <kettenis@gnu.org>
+
+	* Makefile.in (all-lib): Remove.
+	($(LIBGNU) $(GNULIB_H)): Replace with gits of remove all-lib target.
+
+2014-02-09  Jan Kratochvil  <jan.kratochvil@redhat.com>
+
+	Fix Python stack corruption.
+	* python/py-linetable.c (ltpy_get_pcs_for_line, ltpy_has_line): Use
+	gdb_py_longest.
+
+2014-02-08  Mark Kettenis  <kettenis@gnu.org>
+
+	* Makefile.in (all-lib): Remove.
+	($(LIBGNU) $(GNULIB_H)): Replace with gits of remove all-lib target.
+
+2014-02-07  Doug Evans  <dje@google.com>
+
+	* extension-priv.h (extension_language_script_ops): Add comment.
+	(extension_language_ops): Add comment.
+	(active_ext_lang_state): Fix typo in comment.
+
+2014-02-07  Pedro Alves  <palves@redhat.com>
+
+	* infrun.c (handle_signal_stop) <signal arrives while stepping
+	over a breakpoint>: Switch back to the stepping thread.
+
+2014-02-07  Yao Qi  <yao@codesourcery.com>
+
+	* target.c (target_xfer_partial): Return zero if LEN is zero.
+
+2014-02-07  Yao Qi  <yao@codesourcery.com>
+
+	* auxv.c (procfs_xfer_auxv): Replace -1 with TARGET_XFER_E_IO.
+	(ld_so_xfer_auxv): Likewise.
+	* bfd-target.c (target_bfd_xfer_partial): Likewise.
+	* bsd-kvm.c (bsd_kvm_xfer_partial): Likewise.
+	* corelow.c (core_xfer_partial): Likewise.
+	* ctf.c (ctf_xfer_partial): Likewise.
+	* darwin-nat.c (darwin_read_dyld_info): Likewise.
+	(darwin_xfer_partial): Likewise.
+	* exec.c (exec_xfer_partial): Likewise.
+	* gnu-nat.c (gnu_xfer_partial): Likewise.
+	* ia64-hpux-nat.c (ia64_hpux_xfer_uregs): Likewise.
+	* inf-ptrace.c (inf_ptrace_xfer_partial): Likewise.
+	* inf-ttrace.c (inf_ttrace_xfer_partial): Likewise.
+	* linux-nat.c (linux_xfer_siginfo): Likewise.
+	(linux_proc_xfer_spu): Likewise.
+	* procfs.c (procfs_xfer_partial): Likewise.
+	* record-full.c (record_full_xfer_partial): Likewise.
+	(record_full_core_xfer_partial): Likewise.
+	* remote-sim.c (gdbsim_xfer_partial): Likewise.
+	* remote.c (remote_write_qxfer): Likewise.
+	(remote_write_qxfer, remote_read_qxfer): Likewise.
+	(remote_xfer_partial): Likewise.
+	* rs6000-nat.c (rs6000_xfer_partial): Likewise.
+	(rs6000_xfer_shared_libraries): Likewise.
+	* sparc-nat.c (sparc_xfer_wcookie): Likewise.
+	* spu-linux-nat.c (spu_proc_xfer_spu): Likewise.
+	(spu_xfer_partial): Likewise.
+	* target.c (memory_xfer_partial_1): Likewise.
+	* tracepoint.c (tfile_xfer_partial): Likewise.
+	* windows-nat.c (windows_xfer_shared_libraries): Likewise.
+	(windows_xfer_partial): Likewise.
+
+2014-02-07  Yao Qi  <yao@codesourcery.com>
+
+	* gdbarch.sh (core_xfer_shared_libraries): Returns ULONGEST.  Add
+	comments.
+	(core_xfer_shared_libraries_aix): Likewise.
+	* gdbarch.c, gdbarch.h: Regenerated.
+	* i386-cygwin-tdep.c (windows_core_xfer_shared_libraries): Return
+	ULONGEST.  Change 'len_avail' type to ULONGEST.
+	* rs6000-aix-tdep.c (rs6000_aix_ld_info_to_xml): Likewise.
+	* rs6000-aix-tdep.h (rs6000_aix_ld_info_to_xml): Update
+	declaration.
+	(rs6000_aix_core_xfer_shared_libraries_aix): Return ULONGEST.
+
+2014-02-07  Yao Qi  <yao@codesourcery.com>
+
+	* corefile.c (memory_error): Get 'exception' from ERR and pass
+	'exception' to throw_error.
+
+2014-02-06  Doug Evans  <xdje42@gmail.com>
+
+	* configure.ac (libpython checking): Remove all but python.o from
+	CONFIG_OBS.  Remove all but python.c from CONFIG_SRCS.
+	* configure: Regenerate.
+
+	* Makefile.in (SFILES): Add extension.c.
+	(HFILES_NO_SRCDIR): Add extension.h, extension-priv.h
+	(COMMON_OBS): Add extension.o.
+	* extension.h: New file.
+	* extension-priv.h: New file.
+	* extension.c: New file.
+
+	* python/python-internal.h: #include "extension.h".
+	(gdbpy_auto_load_enabled): Declare.
+	(gdbpy_apply_val_pretty_printer): Declare.
+	(gdbpy_apply_frame_filter): Declare.
+	(gdbpy_preserve_values): Declare.
+	(gdbpy_breakpoint_cond_says_stop): Declare.
+	(gdbpy_breakpoint_has_cond): Declare.
+	(void source_python_script_for_objfile): Delete.
+	* python/python.c: #include "extension-priv.h".
+	Delete inclusion of "observer.h".
+	(extension_language_python): Moved here and renamed from
+	script_language_python in py-auto-load.c.
+	Redefined to be of type extension_language_defn.
+	(python_extension_script_ops): New global.
+	(python_extension_ops): New global.
+	(struct python_env): New member previous_active.
+	(restore_python_env): Call restore_active_ext_lang.
+	(ensure_python_env): Call set_active_ext_lang.
+	(gdbpy_clear_quit_flag): Renamed from clear_quit_flag, made static.
+	New arg extlang.
+	(gdbpy_set_quit_flag): Renamed from set_quit_flag, made static.
+	New arg extlang.
+	(gdbpy_check_quit_flag): Renamed from check_quit_flag, made static.
+	New arg extlang.
+	(gdbpy_eval_from_control_command): Renamed from
+	eval_python_from_control_command, made static.  New arg extlang.
+	(gdbpy_source_script) Renamed from source_python_script, made static.
+	New arg extlang.
+	(gdbpy_before_prompt_hook): Renamed from before_prompt_hook.  Change
+	result to int.  New arg extlang.
+	(gdbpy_source_objfile_script): Renamed from
+	source_python_script_for_objfile, made static.  New arg extlang.
+	(gdbpy_start_type_printers): Renamed from start_type_printers, made
+	static.  New args extlang, extlang_printers.  Change result type to
+	"void".
+	(gdbpy_apply_type_printers): Renamed from apply_type_printers, made
+	static.  New arg extlang.  Rename arg printers to extlang_printers
+	and change type to ext_lang_type_printers *.
+	(gdbpy_free_type_printers): Renamed from free_type_printers, made
+	static.  Replace argument arg with extlang, extlang_printers.
+	(!HAVE_PYTHON, eval_python_from_control_command): Delete.
+	(!HAVE_PYTHON, source_python_script): Delete.
+	(!HAVE_PYTHON, gdbpy_should_stop): Delete.
+	(!HAVE_PYTHON, gdbpy_breakpoint_has_py_cond): Delete.
+	(!HAVE_PYTHON, start_type_printers): Delete.
+	(!HAVE_PYTHON, apply_type_printers): Delete.
+	(!HAVE_PYTHON, free_type_printers): Delete.
+	(_initialize_python): Delete call to observer_attach_before_prompt.
+	(finalize_python): Set/restore active extension language.
+	(gdbpy_finish_initialization) Renamed from
+	finish_python_initialization, made static.  New arg extlang.
+	(gdbpy_initialized): New function.
+	* python/python.h: #include "extension.h".  Delete #include
+	"value.h", "mi/mi-cmds.h".
+	(extension_language_python): Declare.
+	(GDBPY_AUTO_FILE_NAME): Delete.
+	(enum py_bt_status): Moved to extension.h and renamed to
+	ext_lang_bt_status.
+	(enum frame_filter_flags): Moved to extension.h.
+	(enum py_frame_args): Moved to extension.h and renamed to
+	ext_lang_frame_args.
+	(finish_python_initialization): Delete.
+	(eval_python_from_control_command): Delete.
+	(source_python_script): Delete.
+	(apply_val_pretty_printer): Delete.
+	(apply_frame_filter): Delete.
+	(preserve_python_values): Delete.
+	(gdbpy_script_language_defn): Delete.
+	(gdbpy_should_stop, gdbpy_breakpoint_has_py_cond): Delete.
+	(start_type_printers, apply_type_printers, free_type_printers): Delete.
+
+	* auto-load.c: #include "extension.h".
+	(GDB_AUTO_FILE_NAME): Delete.
+	(auto_load_gdb_scripts_enabled): Make public.  New arg extlang.
+	(script_language_gdb): Delete, moved to extension.c and renamed to
+	extension_language_gdb.
+	(source_gdb_script_for_objfile): Delete.
+	(auto_load_pspace_info): New member unsupported_script_warning_printed.
+	(loaded_script): Change type of language member to
+	struct extension_language_defn *.
+	(init_loaded_scripts_info): Initialize
+	unsupported_script_warning_printed.
+	(maybe_add_script): Make static.  Change type of language arg to
+	struct extension_language_defn *.
+	(clear_section_scripts): Reset unsupported_script_warning_printed.
+	(auto_load_objfile_script_1): Rewrite to use extension language API.
+	(auto_load_objfile_script): Make public.  Remove support-compiled-in
+	and auto-load-enabled checks, moved to auto_load_scripts_for_objfile.
+	(source_section_scripts): Rewrite to use extension language API.
+	(load_auto_scripts_for_objfile): Rewrite to use
+	auto_load_scripts_for_objfile.
+	(collect_matching_scripts_data): Change type of language member to
+	struct extension_language_defn *.
+	(auto_load_info_scripts): Change type of language arg to
+	struct extension_language_defn *.
+	(unsupported_script_warning_print): New function.
+	(script_not_found_warning_print): Make static.
+	(_initialize_auto_load): Rewrite construction of scripts-directory
+	help.
+	* auto-load.h (struct objfile): Add forward decl.
+	(struct script_language): Delete.
+	(struct auto_load_pspace_info): Add forward decl.
+	(struct extension_language_defn): Add forward decl.
+	(maybe_add_script): Delete.
+	(auto_load_objfile_script): Declare.
+	(script_not_found_warning_print): Delete.
+	(auto_load_info_scripts): Update prototype.
+	(auto_load_gdb_scripts_enabled): Declare.
+	* python/py-auto-load.c (gdbpy_auto_load_enabled): Renamed from
+	auto_load_python_scripts_enabled and made public.
+	(script_language_python): Delete, moved to python.c.
+	(gdbpy_script_language_defn): Delete.
+	(info_auto_load_python_scripts): Update to use
+	extension_language_python.
+
+	* breakpoint.c (condition_command): Replace call to
+	gdbpy_breakpoint_has_py_cond with call to get_breakpoint_cond_ext_lang.
+	(bpstat_check_breakpoint_conditions): Replace call to gdbpy_should_stop
+	with call to breakpoint_ext_lang_cond_says_stop.
+	* python/py-breakpoint.c (gdbpy_breakpoint_cond_says_stop): Renamed
+	from gdbpy_should_stop.  Change result type to enum scr_bp_stop.
+	New arg slang.  Return SCR_BP_STOP_UNSET if py_bp_object is NULL.
+	(gdbpy_breakpoint_has_cond): Renamed from gdbpy_breakpoint_has_py_cond.
+	New arg slang.
+	(local_setattro): Print name of extension language with existing
+	stop condition.
+
+	* valprint.c (val_print, value_print): Update to call
+	apply_ext_lang_val_pretty_printer.
+	* cp-valprint.c (cp_print_value): Update call to
+	apply_ext_lang_val_pretty_printer.
+	* python/py-prettyprint.c: Remove #ifdef HAVE_PYTHON.
+	(gdbpy_apply_val_pretty_printer): Renamed from
+	apply_val_pretty_printer.  New arg extlang.
+	(!HAVE_PYTHON, apply_val_pretty_printer): Delete.
+
+	* cli/cli-cmds.c (source_script_from_stream): Rewrite to use
+	extension language API.
+	* cli/cli-script.c (execute_control_command): Update to call
+	eval_ext_lang_from_control_command.
+
+	* mi/mi-cmd-stack.c (mi_cmd_stack_list_frames): Update to use
+	enum ext_lang_bt_status values.  Update call to
+	apply_ext_lang_frame_filter.
+	(mi_cmd_stack_list_locals): Ditto.
+	(mi_cmd_stack_list_args): Ditto.
+	(mi_cmd_stack_list_variables): Ditto.
+	* mi/mi-main.c: Delete #include "python/python-internal.h".
+	Add #include "extension.h".
+	(mi_cmd_list_features): Replace reference to python internal variable
+	gdb_python_initialized with call to ext_lang_initialized_p.
+
+	* stack.c (backtrace_command_1): Update to use enum ext_lang_bt_status.
+	Update to use enum ext_lang_frame_args.  Update to call
+	apply_ext_lang_frame_filter.
+	* python/py-framefilter.c (extract_sym): Update to use enum
+	ext_lang_bt_status.
+	(extract_value, py_print_type, py_print_value): Ditto.
+	(py_print_single_arg, enumerate_args, enumerate_locals): Ditto.
+	(py_mi_print_variables, py_print_locals, py_print_args): Ditto.
+	(py_print_frame): Ditto.
+	(gdbpy_apply_frame_filter): Renamed from apply_frame_filter.
+	New arg extlang.  Update to use enum ext_lang_bt_status.
+
+	* top.c (gdb_init): Delete #ifdef HAVE_PYTHON call to
+	finish_python_initialization.  Replace with call to
+	finish_ext_lang_initialization.
+
+	* typeprint.c (do_free_global_table): Update to call
+	free_ext_lang_type_printers.
+	(create_global_typedef_table): Update to call
+	start_ext_lang_type_printers.
+	(find_global_typedef): Update to call apply_ext_lang_type_printers.
+	* typeprint.h (struct ext_lang_type_printers): Add forward decl.
+	(type_print_options): Change type of global_printers from "void *"
+	to "struct ext_lang_type_printers *".
+
+	* value.c (preserve_values): Update to call preserve_ext_lang_values.
+	* python/py-value.c: Remove #ifdef HAVE_PYTHON.
+	(gdbpy_preserve_values): Renamed from preserve_python_values.
+	New arg extlang.
+	(!HAVE_PYTHON, preserve_python_values): Delete.
+
+	* utils.c (quit_flag): Delete, moved to extension.c.
+	(clear_quit_flag, set_quit_flag, check_quit_flag): Delete, moved to
+	extension.c.
+
+	* eval.c: Delete #include "python/python.h".
+	* main.c: Delete #include "python/python.h".
+
+	* defs.h: Update comment.
+
+2014-02-06  Joel Brobecker  <brobecker@adacore.com>
+
+	GDB 7.7 released.
+
+2014-02-05  Mark Kettenis  <kettenis@gnu.org>
+
+	* c-exp.y (YYPRINT, c_print_token): Only define if YYBISON is
+	defined.
+
+2014-02-05  Yao Qi  <yao@codesourcery.com>
+
+	* remote.c (remote_pass_signals): Remove local 'buf' and use
+	rs->buf.
+	(remote_program_signals): Likewise.
+
+2014-02-05  Yao Qi  <yao@codesourcery.com>
+
+	* ctf.c: Include "inferior.h" and "gdbthread.h".
+	(CTF_PID): A new macro.
+	(ctf_open): Call inferior_appeared and add_thread_silent.
+	(ctf_close): Call exit_inferior_silent and set inferior_ptid.
+	(ctf_thread_alive): New function.
+	(init_ctf_ops): Install ctf_thread_alive to to_thread_alive.
+
+2014-02-05  Yao Qi  <yao@codesourcery.com>
+
+	Revert this patch:
+
+	2013-05-24  Yao Qi  <yao@codesourcery.com>
+
+	* tracepoint.c (TFILE_PID): Remove.
+	(tfile_open): Don't add thread and inferior.
+	(tfile_close): Don't set 'inferior_ptid'.  Don't call
+	exit_inferior_silent.
+	(tfile_thread_alive): Remove.
+	(init_tfile_ops): Don't set field 'to_thread_alive' of
+	tfile_ops.
+
+2014-02-04  Christian Eggers  <ceggers@gmx.de>  (tiny change)
+
+	* remote.c (remote_start_remote): Call remote_check_symbols even
+	if only symbol-file (not file) has been given.
+
+2014-02-04  Ulrich Weigand  <uweigand@de.ibm.com>
+
+	* gdbarch.sh (skip_entrypoint): New callback.
+	* gdbarch.c, gdbarch.h: Regenerate.
+	* symtab.c (skip_prologue_sal): Call gdbarch_skip_entrypoint.
+	* infrun.c (fill_in_stop_func): Likewise.
+	* ppc-linux-tdep.c: Include "elf/ppc64.h".
+	(ppc_elfv2_elf_make_msymbol_special): New function.
+	(ppc_elfv2_skip_entrypoint): Likewise.
+	(ppc_linux_init_abi): Install them for ELFv2.
+
+2014-02-04  Ulrich Weigand  <uweigand@de.ibm.com>
+
+	* ppc-sysv-tdep.c (ppc64_aggregate_candidate): New routine.
+	(ppc64_elfv2_abi_homogeneous_aggregate): Likewise.
+	(ppc64_sysv_abi_push_param): Handle ELFv2 homogeneous structs.
+	(ppc64_sysv_abi_return_value): Likewise.  Also, handle small
+	structures returned in GPRs.
+
+2014-02-04  Ulrich Weigand  <uweigand@de.ibm.com>
+
+	* ppc-sysv-tdep.c (ppc64_sysv_abi_push_dummy_call): Use correct
+	offset to the stack parameter list for the ELFv2 ABI.
+
+2014-02-04  Ulrich Weigand  <uweigand@de.ibm.com>
+
+	* ppc-linux-tdep.c (ppc_linux_init_abi): Only call
+	set_gdbarch_convert_from_func_ptr_addr and
+	set_gdbarch_elf_make_msymbol_special for ELFv1.
+	* ppc-sysv-tdep.c (ppc64_sysv_abi_push_param): Only handle
+	function descriptors on ELFv1.
+	(ppc64_sysv_abi_push_dummy_call): Likewise.  On ELFv2,
+	set up r12 at function entry.
+
+2014-02-04  Ulrich Weigand  <uweigand@de.ibm.com>
+
+	* ppc-tdep.h (enum powerpc_elf_abi): New data type.
+	(struct gdbarch_tdep): New member elf_abi.
+
+	* rs6000-tdep.c: Include "elf/ppc64.h".
+	(rs6000_gdbarch_init): Detect ELF ABI version.
+
+2014-02-04  Ulrich Weigand  <uweigand@de.ibm.com>
+
+	* ppc-sysv-tdep.c (ppc64_sysv_abi_push_freg): Use correct order
+	within a register pair holding a DFP 128-bit value on little-endian.
+	(ppc64_sysv_abi_return_value_base): Likewise.
+	* rs6000-tdep.c (dfp_pseudo_register_read): Likewise.
+	(dfp_pseudo_register_write): Likewise.
+
+2014-02-04  Ulrich Weigand  <uweigand@de.ibm.com>
+
+	* ppc-sysv-tdep.c (ppc64_sysv_abi_push_freg): Use correct
+	offset on little-endian when passing _Decimal32.
+	(ppc64_sysv_abi_return_value_base): Likewise for return values.
+
+2014-02-04  Ulrich Weigand  <uweigand@de.ibm.com>
+
+	* rs6000-tdep.c (efpr_pseudo_register_read): Use correct offset
+	of the overlapped FP register within the VSX register on little-
+	endian platforms.
+	(efpr_pseudo_register_write): Likewise.
+
+2014-02-04  Ulrich Weigand  <uweigand@de.ibm.com>
+
+	* ppc-sysv-tdep.c (ppc64_sysv_abi_push_val): Use correct
+	offset on little-endian when passing small structures.
+
+2014-02-04  Ulrich Weigand  <uweigand@de.ibm.com>
+
+	* ppc-sysv-tdep.c (get_decimal_float_return_value): Update comment.
+	(struct ppc64_sysv_argpos): New data structure.
+	(ppc64_sysv_abi_push_float): Remove.
+	(ppc64_sysv_abi_push_val): New function.
+	(ppc64_sysv_abi_push_integer): Likewise.
+	(ppc64_sysv_abi_push_freg): Likewise.
+	(ppc64_sysv_abi_push_vreg): Likewise.
+	(ppc64_sysv_abi_push_param): Likewise.
+	(ppc64_sysv_abi_push_dummy_call): Refactor to use those new routines.
+	(ppc64_sysv_abi_return_value_base): New function.
+	(ppc64_sysv_abi_return_value): Refactor to use it.
+
+2014-02-04  Ulrich Weigand  <uweigand@de.ibm.com>
+
+	* NEWS: Document new target powerpc64le-*-linux*.
+
+2014-02-04  Mark Kettenis  <kettenis@gnu.org>
+
+	* sparc64obsd-tdep.c (sparc64obsd_gregset): New variable.
+	(sparc64obsd_supply_gregset): Handle registers sets used in ELF
+	core dumps.
+	(sparc64obsd_init_abi): Adjust minimum size of the general purpose
+	register set used in ELF core dumps.  Add floating-point register set.
+
+2014-02-03  Kevin Buettner  <kevinb@redhat.com>
+
+	* mn10300-tdep.c (mn10300_dwarf2_reg_to_regnum): Rewrite 
+	dwarf2_to_gdb[] table using symbolic constants.  Adjust
+	penultimate entry from number representing the PC register
+	to symbolic constant representing the MDR register.  Add
+	constant for the PC register to the end of the table.
+
+2014-02-03  Mark Kettenis  <kettenis@gnu.org>
+
+	* bsd-kvm.c: Include <sys/param.h>
+
+2014-02-03  Mark Kettenis  <kettenis@gnu.org>
+
+	* sparc64nbsd-nat.c (sparc64nbsd_supply_fpregset): Fix prototype.
+
 2014-01-31  Joel Brobecker  <brobecker@adacore.com>
 
 	* ada-lang.h (clear_ada_sym_cache): Delete.

@@ -672,17 +672,17 @@ get_core_siginfo (bfd *abfd, gdb_byte *readbuf, ULONGEST offset, ULONGEST len)
   return len;
 }
 
-static LONGEST
+static enum target_xfer_status
 core_xfer_partial (struct target_ops *ops, enum target_object object,
 		   const char *annex, gdb_byte *readbuf,
 		   const gdb_byte *writebuf, ULONGEST offset,
-		   ULONGEST len)
+		   ULONGEST len, ULONGEST *xfered_len)
 {
   switch (object)
     {
     case TARGET_OBJECT_MEMORY:
       return section_table_xfer_memory_partial (readbuf, writebuf,
-						offset, len,
+						offset, len, xfered_len,
 						core_data->sections,
 						core_data->sections_end,
 						NULL);
@@ -698,25 +698,28 @@ core_xfer_partial (struct target_ops *ops, enum target_object object,
 
 	  section = bfd_get_section_by_name (core_bfd, ".auxv");
 	  if (section == NULL)
-	    return -1;
+	    return TARGET_XFER_E_IO;
 
 	  size = bfd_section_size (core_bfd, section);
 	  if (offset >= size)
-	    return 0;
+	    return TARGET_XFER_EOF;
 	  size -= offset;
 	  if (size > len)
 	    size = len;
-	  if (size > 0
-	      && !bfd_get_section_contents (core_bfd, section, readbuf,
-					    (file_ptr) offset, size))
+
+	  if (size == 0)
+	    return TARGET_XFER_EOF;
+	  if (!bfd_get_section_contents (core_bfd, section, readbuf,
+					 (file_ptr) offset, size))
 	    {
 	      warning (_("Couldn't read NT_AUXV note in core file."));
-	      return -1;
+	      return TARGET_XFER_E_IO;
 	    }
 
-	  return size;
+	  *xfered_len = (ULONGEST) size;
+	  return TARGET_XFER_OK;
 	}
-      return -1;
+      return TARGET_XFER_E_IO;
 
     case TARGET_OBJECT_WCOOKIE:
       if (readbuf)
@@ -730,7 +733,7 @@ core_xfer_partial (struct target_ops *ops, enum target_object object,
 
 	  section = bfd_get_section_by_name (core_bfd, ".wcookie");
 	  if (section == NULL)
-	    return -1;
+	    return TARGET_XFER_E_IO;
 
 	  size = bfd_section_size (core_bfd, section);
 	  if (offset >= size)
@@ -738,27 +741,39 @@ core_xfer_partial (struct target_ops *ops, enum target_object object,
 	  size -= offset;
 	  if (size > len)
 	    size = len;
-	  if (size > 0
-	      && !bfd_get_section_contents (core_bfd, section, readbuf,
-					    (file_ptr) offset, size))
+
+	  if (size == 0)
+	    return TARGET_XFER_EOF;
+	  if (!bfd_get_section_contents (core_bfd, section, readbuf,
+					 (file_ptr) offset, size))
 	    {
 	      warning (_("Couldn't read StackGhost cookie in core file."));
-	      return -1;
+	      return TARGET_XFER_E_IO;
 	    }
 
-	  return size;
+	  *xfered_len = (ULONGEST) size;
+	  return TARGET_XFER_OK;
+
 	}
-      return -1;
+      return TARGET_XFER_E_IO;
 
     case TARGET_OBJECT_LIBRARIES:
       if (core_gdbarch
 	  && gdbarch_core_xfer_shared_libraries_p (core_gdbarch))
 	{
 	  if (writebuf)
-	    return -1;
-	  return
-	    gdbarch_core_xfer_shared_libraries (core_gdbarch,
-						readbuf, offset, len);
+	    return TARGET_XFER_E_IO;
+	  else
+	    {
+	      *xfered_len = gdbarch_core_xfer_shared_libraries (core_gdbarch,
+								readbuf,
+								offset, len);
+
+	      if (*xfered_len == 0)
+		return TARGET_XFER_EOF;
+	      else
+		return TARGET_XFER_OK;
+	    }
 	}
       /* FALL THROUGH */
 
@@ -767,10 +782,19 @@ core_xfer_partial (struct target_ops *ops, enum target_object object,
 	  && gdbarch_core_xfer_shared_libraries_aix_p (core_gdbarch))
 	{
 	  if (writebuf)
-	    return -1;
-	  return
-	    gdbarch_core_xfer_shared_libraries_aix (core_gdbarch,
-						    readbuf, offset, len);
+	    return TARGET_XFER_E_IO;
+	  else
+	    {
+	      *xfered_len
+		= gdbarch_core_xfer_shared_libraries_aix (core_gdbarch,
+							  readbuf, offset,
+							  len);
+
+	      if (*xfered_len == 0)
+		return TARGET_XFER_EOF;
+	      else
+		return TARGET_XFER_OK;
+	    }
 	}
       /* FALL THROUGH */
 
@@ -789,23 +813,26 @@ core_xfer_partial (struct target_ops *ops, enum target_object object,
 
 	  section = bfd_get_section_by_name (core_bfd, sectionstr);
 	  if (section == NULL)
-	    return -1;
+	    return TARGET_XFER_E_IO;
 
 	  size = bfd_section_size (core_bfd, section);
 	  if (offset >= size)
-	    return 0;
+	    return TARGET_XFER_EOF;
 	  size -= offset;
 	  if (size > len)
 	    size = len;
-	  if (size > 0
-	      && !bfd_get_section_contents (core_bfd, section, readbuf,
-					    (file_ptr) offset, size))
+
+	  if (size == 0)
+	    return TARGET_XFER_EOF;
+	  if (!bfd_get_section_contents (core_bfd, section, readbuf,
+					 (file_ptr) offset, size))
 	    {
 	      warning (_("Couldn't read SPU section in core file."));
-	      return -1;
+	      return TARGET_XFER_E_IO;
 	    }
 
-	  return size;
+	  *xfered_len = (ULONGEST) size;
+	  return TARGET_XFER_OK;
 	}
       else if (readbuf)
 	{
@@ -818,21 +845,37 @@ core_xfer_partial (struct target_ops *ops, enum target_object object,
 	  list.pos = 0;
 	  list.written = 0;
 	  bfd_map_over_sections (core_bfd, add_to_spuid_list, &list);
-	  return list.written;
+
+	  if (list.written == 0)
+	    return TARGET_XFER_EOF;
+	  else
+	    {
+	      *xfered_len = (ULONGEST) list.written;
+	      return TARGET_XFER_OK;
+	    }
 	}
-      return -1;
+      return TARGET_XFER_E_IO;
 
     case TARGET_OBJECT_SIGNAL_INFO:
       if (readbuf)
-	return get_core_siginfo (core_bfd, readbuf, offset, len);
-      return -1;
+	{
+	  LONGEST l = get_core_siginfo (core_bfd, readbuf, offset, len);
+
+	  if (l > 0)
+	    {
+	      *xfered_len = len;
+	      return TARGET_XFER_OK;
+	    }
+	}
+      return TARGET_XFER_E_IO;
 
     default:
       if (ops->beneath != NULL)
 	return ops->beneath->to_xfer_partial (ops->beneath, object,
 					      annex, readbuf,
-					      writebuf, offset, len);
-      return -1;
+					      writebuf, offset, len,
+					      xfered_len);
+      return TARGET_XFER_E_IO;
     }
 }
 

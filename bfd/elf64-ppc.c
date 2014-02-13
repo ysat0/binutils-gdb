@@ -4168,19 +4168,31 @@ ppc64_elf_link_hash_table_create (bfd *abfd)
   /* Init the stub hash table too.  */
   if (!bfd_hash_table_init (&htab->stub_hash_table, stub_hash_newfunc,
 			    sizeof (struct ppc_stub_hash_entry)))
-    return NULL;
+    {
+      _bfd_elf_link_hash_table_free ((struct bfd_link_hash_table *) htab);
+      return NULL;
+    }
 
   /* And the branch hash table.  */
   if (!bfd_hash_table_init (&htab->branch_hash_table, branch_hash_newfunc,
 			    sizeof (struct ppc_branch_hash_entry)))
-    return NULL;
+    {
+      bfd_hash_table_free (&htab->stub_hash_table);
+      _bfd_elf_link_hash_table_free ((struct bfd_link_hash_table *) htab);
+      return NULL;
+    }
 
   htab->tocsave_htab = htab_try_create (1024,
 					tocsave_htab_hash,
 					tocsave_htab_eq,
 					NULL);
   if (htab->tocsave_htab == NULL)
-    return NULL;
+    {
+      bfd_hash_table_free (&htab->branch_hash_table);
+      bfd_hash_table_free (&htab->stub_hash_table);
+      _bfd_elf_link_hash_table_free ((struct bfd_link_hash_table *) htab);
+      return NULL;
+    }
 
   /* Initializing two fields of the union is just cosmetic.  We really
      only care about glist, but when compiled on a 32-bit host the
@@ -6141,6 +6153,7 @@ ppc64_elf_gc_mark_dynamic_ref (struct elf_link_hash_entry *h, void *inf)
   struct bfd_link_info *info = (struct bfd_link_info *) inf;
   struct ppc_link_hash_entry *eh = (struct ppc_link_hash_entry *) h;
   struct ppc_link_hash_entry *fdh;
+  struct bfd_elf_dynamic_list *d = info->dynamic_list;
 
   /* Dynamic linking info is on the func descriptor sym.  */
   fdh = defined_func_desc (eh);
@@ -6150,10 +6163,14 @@ ppc64_elf_gc_mark_dynamic_ref (struct elf_link_hash_entry *h, void *inf)
   if ((eh->elf.root.type == bfd_link_hash_defined
        || eh->elf.root.type == bfd_link_hash_defweak)
       && (eh->elf.ref_dynamic
-	  || (!info->executable
-	      && eh->elf.def_regular
+	  || (eh->elf.def_regular
 	      && ELF_ST_VISIBILITY (eh->elf.other) != STV_INTERNAL
 	      && ELF_ST_VISIBILITY (eh->elf.other) != STV_HIDDEN
+	      && (!info->executable
+		  || info->export_dynamic
+		  || (eh->elf.dynamic
+		      && d != NULL
+		      && (*d->match) (&d->head, NULL, eh->elf.root.root.string)))
 	      && (strchr (eh->elf.root.root.string, ELF_VER_CHR) != NULL
 		  || !bfd_hide_sym_by_version (info->version_info,
 					       eh->elf.root.root.string)))))
@@ -8073,7 +8090,10 @@ ppc64_elf_tls_optimize (struct bfd_link_info *info)
 	      relstart = _bfd_elf_link_read_relocs (ibfd, sec, NULL, NULL,
 						    info->keep_memory);
 	      if (relstart == NULL)
-		return FALSE;
+		{
+		  free (toc_ref);
+		  return FALSE;
+		}
 
 	      relend = relstart + sec->reloc_count;
 	      for (rel = relstart; rel < relend; rel++)
@@ -8781,7 +8801,10 @@ ppc64_elf_edit_toc (struct bfd_link_info *info)
 	  relstart = _bfd_elf_link_read_relocs (ibfd, sec, NULL, NULL,
 						info->keep_memory);
 	  if (relstart == NULL)
-	    goto error_ret;
+	    {
+	      free (used);
+	      goto error_ret;
+	    }
 
 	  /* Mark toc entries referenced as used.  */
 	  do
