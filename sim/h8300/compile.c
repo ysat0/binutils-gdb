@@ -1946,6 +1946,11 @@ static unsigned long tracetail;
 
 static void add_trace(unsigned long pc)
 {
+  static unsigned long last_pc = 0xfffffff;
+
+  if (pc == last_pc)
+    return;
+  last_pc = pc;
   if (tracesize == tracetail) {
          trace_buffer = (unsigned long *)realloc(trace_buffer, 
                                                  (tracesize * sizeof(unsigned long) + 65536));
