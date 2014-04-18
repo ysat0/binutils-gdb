@@ -3721,13 +3721,13 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	  if (h8300smode)			/* pop exr */
 	    {
 	      h8_set_exr (sd, GET_MEMORY_L (tmp));
-	      tmp += 4;
+	      tmp += 2;
 	    }
 	  if (h8300hmode && !h8300_normal_mode)
 	    {
-	      h8_set_ccr (sd, GET_MEMORY_L (tmp));
-	      tmp += 4;
 	      pc = GET_MEMORY_L (tmp);
+	      h8_set_ccr (sd, pc >> 24);
+	      pc &= 0x00ffffff;
 	      tmp += 4;
 	    }
 	  else
@@ -3804,19 +3804,28 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
    	      tmp -= 2;
    	      SET_MEMORY_W (tmp, h8_get_ccr (sd));
    	    }
-   	  else
+	  else if (h8300hmode || h8300smode)
    	    {
+	      unsigned long ccr_pc;
+	      ccr_pc =h8_get_ccr(sd) << 24 | code->next_pc;
    	      tmp -= 4;
-   	      SET_MEMORY_L (tmp, code->next_pc);
-   	      tmp -= 4;
-   	      SET_MEMORY_L (tmp, h8_get_ccr (sd));
-   	    }
+	      SET_MEMORY_L (tmp, ccr_pc);
+	    }
+	  else
+	    {
+	      unsigned short exrccr;
+	      exrccr = h8_get_exr(sd) << 8 | h8_get_ccr(sd);
+	      tmp -= 2;
+	      SET_MEMORY_W (tmp, exrccr);
+	      tmp -= 4;
+	      SET_MEMORY_L (tmp, pc);
+	    }
    	  intMaskBit = 1;
    	  BUILDSR (sd);
  
 	  if (h8300smode)
 	    {
-	      tmp -= 4;
+	      tmp -= 2;
 	      SET_MEMORY_L (tmp, h8_get_exr (sd));
 	    }
 
