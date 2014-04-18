@@ -1035,12 +1035,15 @@ decode (SIM_DESC sd, int addr, unsigned char *data, decoded_inst *dst)
 
 			    /* 8-bit ABS is displacement from SBR.
 			       16 and 32-bit ABS are displacement from ZERO.
-			       (SBR will always be zero except for h8/sx)
+			       (SBR will always be 0xffff00 except for h8/sx)
 			    */
 			    if ((x & SIZE) == L_8)
 			      p->reg = SBR_REGNUM;
 			    else
-			      p->reg = ZERO_REGNUM;;
+			      p->reg = ZERO_REGNUM;
+			    /* address extend for @x:16 */
+			    if ((x & SIZE) == L_16U)
+			      p->literal += (p->literal >= 0x8000)?0xff0000:0x000000;
 			  }
 			else if ((x & MODE) == MEMIND ||
 				 (x & MODE) == VECIND)
