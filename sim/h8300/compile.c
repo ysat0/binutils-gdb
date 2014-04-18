@@ -5400,8 +5400,8 @@ sim_do_command (SIM_DESC sd, char *cmd)
   else if (strncmp(cmd, "help", 4) == 0)
     (*sim_callback->printf_filtered) (sim_callback,
                                      "List of H8/300 Simulator commands\n\n"
-                                     "show-history <n> -- show trace history\n"
-                                     "save-history filename -- save trace history\n"
+                                     "show-trace <n> -- show trace history\n"
+                                     "save-trace filename -- save trace history\n"
 				     "show-mem <n> -- show memory access log\n"
 				     "save-mem filename -- save memory access log\n"
 				     "sci [pty|net port] -- open sci port\n"
