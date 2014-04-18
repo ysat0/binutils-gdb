@@ -794,6 +794,8 @@ get_priority(SIM_DESC sd, int vec)
       b = 1 << (b & 7);
       if (ipr & b)
 	return vec + 0x100;
+      else
+	return vec;
     }
 }
 
