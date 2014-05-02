@@ -1962,11 +1962,15 @@ static void add_trace(unsigned long pc)
 
 static void init_history(void)
 {
-  if(trace_buffer)
+  if(trace_buffer) {
     free(trace_buffer);
+    trace_buffer = NULL;
+  }
   tracesize = tracetail = 0;
-  if(memlog_buffer)
+  if(memlog_buffer) {
     free(memlog_buffer);
+    memlog_buffer = NULL;
+  }
   memlogsize = memlogtail = 0;
 }
 
@@ -5399,13 +5403,20 @@ sim_do_command (SIM_DESC sd, char *cmd)
     }
   else if (strncmp(cmd, "help", 4) == 0)
     (*sim_callback->printf_filtered) (sim_callback,
-                                     "List of H8/300 Simulator commands\n\n"
-                                     "show-trace <n> -- show trace history\n"
-                                     "save-trace filename -- save trace history\n"
-				     "show-mem <n> -- show memory access log\n"
-				     "save-mem filename -- save memory access log\n"
-				     "sci [pty|net port] -- open sci port\n"
+				      "List of H8/300 Simulator commands\n\n"
+				      "show-trace <n> -- show trace history\n"
+				      "save-trace filename -- save trace history\n"
+				      "show-mem <n> -- show memory access log\n"
+				      "save-mem filename -- save memory access log\n"
+				      "sci [pty|net port] -- open sci port\n"
+				      "intmode mode -- set interrupt mode\n"
 	    );
+  else if (strncmp(cmd, "intmode", 7) == 0)
+    {
+      cmd += 7;
+      while(isspace(*cmd)) cmd++;
+      h8300_interrupt_mode = atoi(cmd);
+    }
   else
     (*sim_callback->printf_filtered) (sim_callback,
 				      "Error: Unknown \"%s\" command\n", cmd);
