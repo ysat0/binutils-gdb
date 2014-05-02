@@ -318,7 +318,7 @@ h8300sx_timer16(SIM_DESC sd, unsigned int cycles_diff)
   int tm, cnt, pcnt, gr, pulse;
   for (pcnt = 0; pcnt < 4; pcnt++) {
     prescale[pcnt] -= cycles_diff;
-    pulse = -prescale[pcnt] / prescale_div[cnt];
+    pulse = -prescale[pcnt] / prescale_div[cnt] + 1;
     if (prescale[pcnt]<=0) 
     {
       /* input time pulse */
@@ -383,7 +383,7 @@ h8300s_timer16(SIM_DESC sd, unsigned int cycles_diff)
   int tm, cnt, pcnt, gr, pulse;
   for (pcnt = 0; pcnt < 4; pcnt++) {
     prescale[pcnt] -= cycles_diff;
-    pulse = -prescale[pcnt] / prescale_div[pcnt];
+    pulse = -prescale[pcnt] / prescale_div[pcnt] + 1;
     if (prescale[pcnt]<=0) 
     {
       /* input time pulse */
@@ -396,7 +396,7 @@ h8300s_timer16(SIM_DESC sd, unsigned int cycles_diff)
 	/* internal TCSR status clear */
 	tsr[tm] &= TPU_TSR(tm);
 	/* update counter */
-        if ((TPU_TCR(tm) & 0x07) == pcnt)
+        if ((TPU_TCR(tm) & 0x0f) == pcnt)
           {
             cnt = ((TPU_TCNTH(tm) << 8) | TPU_TCNTL(tm));
 	    cnt += pulse;
@@ -404,8 +404,22 @@ h8300s_timer16(SIM_DESC sd, unsigned int cycles_diff)
 	    /* CNT overflow check */
             if (cnt>=0x10000)
               {
+		int cascade_low = tm % 3;
                 tsr[tm] |= 0x10;
-                cnt = 0;
+                cnt -= 0x10000;
+		if (cascade_low == 2)
+		  {
+		    int cascade_high = tm - cascade_low + 1;
+		    if (TPU_TCR(cascade_high) & 0x0f == 0x0f)
+		      {
+			int cascade_cnt;
+			cascade_cnt = ((TPU_TCNTH(cascade_high) << 8) | 
+				       TPU_TCNTL(cascade_high));
+			cascade_cnt++;
+			TPU_TCNTH(cascade_high) = (cascade_cnt >> 8);
+			TPU_TCNTL(cascade_high) = cascade_cnt & 0xff;
+		      }
+		  }
               }
 
 	    /* GRA compare match check*/
@@ -413,7 +427,7 @@ h8300s_timer16(SIM_DESC sd, unsigned int cycles_diff)
 	    if (cnt >= gr)
 	      {
                 tsr[tm] |= 0x1;
-		if ((TPU_TCR(tm) & 0x60) == 0x20)
+		if ((TPU_TCR(tm) & 0xe0) == 0x20)
 		  cnt = 0;
 	      }
 
@@ -422,7 +436,7 @@ h8300s_timer16(SIM_DESC sd, unsigned int cycles_diff)
 	    if (cnt >= gr)
 	      {
                 tsr[tm] |= 0x2;
-		if ((TPU_TCR(tm) & 0x60) == 0x20)
+		if ((TPU_TCR(tm) & 0xe0) == 0x40)
 		  cnt = 0;
 	      }
 
@@ -448,9 +462,10 @@ h8300h_timer16(SIM_DESC sd, unsigned int cycles_diff)
   int tm, cnt, pcnt, gr, pulse;
   for (pcnt = 0; pcnt < 4; pcnt++) {
     prescale[pcnt] -= cycles_diff;
-    pulse = -prescale[pcnt] / prescale_div[pcnt];
     if (prescale[pcnt]<=0) 
     {
+      pulse = -prescale[pcnt] / prescale_div[pcnt] + 1;
+      prescale[pcnt]+=prescale_div[pcnt];
       /* input time pulse */
       for(tm=0; tm < 3; tm++) {
 
@@ -498,7 +513,6 @@ h8300h_timer16(SIM_DESC sd, unsigned int cycles_diff)
           }
 
       }
-      prescale[pcnt]+=prescale_div[pcnt];
       /* update TSCR */
       TISRA16 &= 0x70;
       TISRA16 |= tisra;
