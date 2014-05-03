@@ -5305,6 +5305,11 @@ static void show_memlog(int lines)
 {
   unsigned long idx;
   idx = memlogtail - lines;
+  if (memlog_buffer == NULL)
+    {
+      (*sim_callback->printf_filtered) (sim_callback, "no memlog\n");
+      return;
+    }
   for (; lines > 0; --lines)
     {
       (*sim_callback->printf_filtered) (sim_callback,
@@ -5322,6 +5327,11 @@ static void save_memlog(char *filename)
 {
   FILE *fp;
   unsigned long idx;
+  if (memlog_buffer == NULL)
+    {
+      (*sim_callback->printf_filtered) (sim_callback, "no memlog\n");
+      return;
+    }
   fp = fopen(filename, "w");
   if (!fp)
     {
