@@ -3722,9 +3722,13 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	  /* Pops exr and ccr before pc -- otherwise identical to rts.  */
 	  tmp = h8_get_reg (sd, SP_REGNUM);
 
-	  if (h8300smode)			/* pop exr */
+	  if (h8300smode && (h8300_interrupt_mode == 2))	/* pop exr */
 	    {
-	      h8_set_exr (sd, GET_MEMORY_L (tmp));
+	      unsigned char exr;
+	      exr = GET_MEMORY_W (tmp) >> 8;
+	      h8_set_exr (sd, exr);
+	      intMask = exr & 7;
+	      trace = exr & 0x80;
 	      tmp += 2;
 	    }
 	  if (h8300hmode && !h8300_normal_mode)
