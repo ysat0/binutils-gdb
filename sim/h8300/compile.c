@@ -2079,11 +2079,11 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	  insts++;
 	  add_trace(pc);
 	  if ((vector = iosimulation (sd, cycles)) && 
-	      (intlevel(sd) <= (vector & 0xff00)))
+	      (intlevel(sd) < (vector & 0xff00)))
 	    {
 	      unsigned int ccr;
 	      unsigned long vbr = 0;
-	      int pri = (vector & 0xff00) & 7;
+	      int pri = ((vector & 0xff00) >> 8) & 7;
 	      vector &= 0xff;
 	      BUILDSR (sd);
 	      ccr = h8_get_ccr (sd);
