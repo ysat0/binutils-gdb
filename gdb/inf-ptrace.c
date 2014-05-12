@@ -147,7 +147,7 @@ inf_ptrace_create_inferior (struct target_ops *ops,
 #ifdef PT_GET_PROCESS_STATE
 
 static void
-inf_ptrace_post_startup_inferior (ptid_t pid)
+inf_ptrace_post_startup_inferior (struct target_ops *self, ptid_t pid)
 {
   ptrace_event_t pe;
 
@@ -246,7 +246,7 @@ inf_ptrace_attach (struct target_ops *ops, char *args, int from_tty)
 #ifdef PT_GET_PROCESS_STATE
 
 static void
-inf_ptrace_post_attach (int pid)
+inf_ptrace_post_attach (struct target_ops *self, int pid)
 {
   ptrace_event_t pe;
 
@@ -321,7 +321,7 @@ inf_ptrace_kill (struct target_ops *ops)
 /* Stop the inferior.  */
 
 static void
-inf_ptrace_stop (ptid_t ptid)
+inf_ptrace_stop (struct target_ops *self, ptid_t ptid)
 {
   /* Send a SIGINT to the process group.  This acts just like the user
      typed a ^C on the controlling terminal.  Note that using a

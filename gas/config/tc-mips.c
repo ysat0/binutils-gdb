@@ -1,7 +1,5 @@
 /* tc-mips.c -- assemble code for a MIPS chip.
-   Copyright 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002,
-   2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013
-   Free Software Foundation, Inc.
+   Copyright (C) 1993-2014 Free Software Foundation, Inc.
    Contributed by the OSF and Ralph Campbell.
    Written by Keith Knowles and Ralph Campbell, working independently.
    Modified for ECOFF and R4000 support by Ian Lance Taylor of Cygnus
@@ -43,6 +41,8 @@ typedef char static_assert2[sizeof (valueT) < 8 ? -1 : 1];
 #else
 #define DBG(x)
 #endif
+
+#define streq(a, b)           (strcmp (a, b) == 0)
 
 #define SKIP_SPACE_TABS(S) \
   do { while (*(S) == ' ' || *(S) == '\t') ++(S); } while (0)
@@ -242,7 +242,7 @@ struct mips_set_options
      to 32 bit.  This is initially determined when -mgp32 or -mfp32
      is passed but can changed if the assembler code uses .set mipsN.  */
   int gp32;
-  int fp32;
+  int fp;
   /* MIPS architecture (CPU) type.  Changed by .set arch=FOO, the -march
      command line option, and the default CPU.  */
   int arch;
@@ -259,31 +259,30 @@ struct mips_set_options
   bfd_boolean single_float;
 };
 
-/* This is the struct we use to hold the current set of options.  Note
-   that we must set the isa field to ISA_UNKNOWN and the ASE fields to
-   -1 to indicate that they have not been initialized.  */
-
-/* True if -mgp32 was passed.  */
-static int file_mips_gp32 = -1;
-
-/* True if -mfp32 was passed.  */
-static int file_mips_fp32 = -1;
-
-/* 1 if -msoft-float, 0 if -mhard-float.  The default is 0.  */
-static int file_mips_soft_float = 0;
-
-/* 1 if -msingle-float, 0 if -mdouble-float.  The default is 0.   */
-static int file_mips_single_float = 0;
-
 /* True if -mnan=2008, false if -mnan=legacy.  */
 static bfd_boolean mips_flag_nan2008 = FALSE;
+
+/* This is the struct we use to hold the module level set of options.
+   Note that we must set the isa field to ISA_UNKNOWN and the ASE, gp32 and
+   fp fields to -1 to indicate that they have not been initialized.  */
+
+static struct mips_set_options file_mips_opts =
+{
+  /* isa */ ISA_UNKNOWN, /* ase */ 0, /* mips16 */ -1, /* micromips */ -1,
+  /* noreorder */ 0,  /* at */ ATREG, /* warn_about_macros */ 0,
+  /* nomove */ 0, /* nobopt */ 0, /* noautoextend */ 0, /* insn32 */ FALSE,
+  /* gp32 */ -1, /* fp */ -1, /* arch */ CPU_UNKNOWN, /* sym32 */ FALSE,
+  /* soft_float */ FALSE, /* single_float */ FALSE
+};
+
+/* This is similar to file_mips_opts, but for the current set of options.  */
 
 static struct mips_set_options mips_opts =
 {
   /* isa */ ISA_UNKNOWN, /* ase */ 0, /* mips16 */ -1, /* micromips */ -1,
   /* noreorder */ 0,  /* at */ ATREG, /* warn_about_macros */ 0,
   /* nomove */ 0, /* nobopt */ 0, /* noautoextend */ 0, /* insn32 */ FALSE,
-  /* gp32 */ 0, /* fp32 */ 0, /* arch */ CPU_UNKNOWN, /* sym32 */ FALSE,
+  /* gp32 */ -1, /* fp */ -1, /* arch */ CPU_UNKNOWN, /* sym32 */ FALSE,
   /* soft_float */ FALSE, /* single_float */ FALSE
 };
 
@@ -300,16 +299,17 @@ static unsigned int file_ase_explicit;
 unsigned long mips_gprmask;
 unsigned long mips_cprmask[4];
 
-/* MIPS ISA we are using for this output file.  */
-static int file_mips_isa = ISA_UNKNOWN;
-
 /* True if any MIPS16 code was produced.  */
 static int file_ase_mips16;
 
 #define ISA_SUPPORTS_MIPS16E (mips_opts.isa == ISA_MIPS32		\
 			      || mips_opts.isa == ISA_MIPS32R2		\
+			      || mips_opts.isa == ISA_MIPS32R3		\
+			      || mips_opts.isa == ISA_MIPS32R5		\
 			      || mips_opts.isa == ISA_MIPS64		\
-			      || mips_opts.isa == ISA_MIPS64R2)
+			      || mips_opts.isa == ISA_MIPS64R2		\
+			      || mips_opts.isa == ISA_MIPS64R3		\
+			      || mips_opts.isa == ISA_MIPS64R5)
 
 /* True if any microMIPS code was produced.  */
 static int file_ase_micromips;
@@ -327,7 +327,6 @@ static int file_ase_micromips;
 #endif
 
 /* The argument of the -march= flag.  The architecture we are assembling.  */
-static int file_mips_arch = CPU_UNKNOWN;
 static const char *mips_arch_string;
 
 /* The argument of the -mtune= flag.  The architecture for which we
@@ -353,7 +352,9 @@ static int mips_32bitmode = 0;
    || (ISA) == ISA_MIPS4		\
    || (ISA) == ISA_MIPS5		\
    || (ISA) == ISA_MIPS64		\
-   || (ISA) == ISA_MIPS64R2)
+   || (ISA) == ISA_MIPS64R2		\
+   || (ISA) == ISA_MIPS64R3		\
+   || (ISA) == ISA_MIPS64R5)
 
 /*  Return true if ISA supports 64 bit wide float registers.  */
 #define ISA_HAS_64BIT_FPRS(ISA)		\
@@ -361,13 +362,19 @@ static int mips_32bitmode = 0;
    || (ISA) == ISA_MIPS4		\
    || (ISA) == ISA_MIPS5		\
    || (ISA) == ISA_MIPS32R2		\
+   || (ISA) == ISA_MIPS32R3		\
+   || (ISA) == ISA_MIPS32R5		\
    || (ISA) == ISA_MIPS64		\
-   || (ISA) == ISA_MIPS64R2)
+   || (ISA) == ISA_MIPS64R2		\
+   || (ISA) == ISA_MIPS64R3		\
+   || (ISA) == ISA_MIPS64R5		)
 
 /* Return true if ISA supports 64-bit right rotate (dror et al.)
    instructions.  */
 #define ISA_HAS_DROR(ISA)		\
   ((ISA) == ISA_MIPS64R2		\
+   || (ISA) == ISA_MIPS64R3		\
+   || (ISA) == ISA_MIPS64R5		\
    || (mips_opts.micromips		\
        && ISA_HAS_64BIT_REGS (ISA))	\
    )
@@ -376,7 +383,11 @@ static int mips_32bitmode = 0;
    instructions.  */
 #define ISA_HAS_ROR(ISA)		\
   ((ISA) == ISA_MIPS32R2		\
+   || (ISA) == ISA_MIPS32R3		\
+   || (ISA) == ISA_MIPS32R5		\
    || (ISA) == ISA_MIPS64R2		\
+   || (ISA) == ISA_MIPS64R3		\
+   || (ISA) == ISA_MIPS64R5		\
    || (mips_opts.ase & ASE_SMARTMIPS)	\
    || mips_opts.micromips		\
    )
@@ -385,20 +396,28 @@ static int mips_32bitmode = 0;
 #define ISA_HAS_ODD_SINGLE_FPR(ISA)	\
   ((ISA) == ISA_MIPS32			\
    || (ISA) == ISA_MIPS32R2		\
+   || (ISA) == ISA_MIPS32R3		\
+   || (ISA) == ISA_MIPS32R5		\
    || (ISA) == ISA_MIPS64		\
-   || (ISA) == ISA_MIPS64R2)
+   || (ISA) == ISA_MIPS64R2		\
+   || (ISA) == ISA_MIPS64R3		\
+   || (ISA) == ISA_MIPS64R5)
 
 /* Return true if ISA supports move to/from high part of a 64-bit
    floating-point register. */
 #define ISA_HAS_MXHC1(ISA)		\
   ((ISA) == ISA_MIPS32R2		\
-   || (ISA) == ISA_MIPS64R2)
+   || (ISA) == ISA_MIPS32R3		\
+   || (ISA) == ISA_MIPS32R5		\
+   || (ISA) == ISA_MIPS64R2		\
+   || (ISA) == ISA_MIPS64R3		\
+   || (ISA) == ISA_MIPS64R5)
 
 #define HAVE_32BIT_GPRS		                   \
     (mips_opts.gp32 || !ISA_HAS_64BIT_REGS (mips_opts.isa))
 
 #define HAVE_32BIT_FPRS                            \
-    (mips_opts.fp32 || !ISA_HAS_64BIT_FPRS (mips_opts.isa))
+    (mips_opts.fp != 64 || !ISA_HAS_64BIT_FPRS (mips_opts.isa))
 
 #define HAVE_64BIT_GPRS (!HAVE_32BIT_GPRS)
 #define HAVE_64BIT_FPRS (!HAVE_32BIT_FPRS)
@@ -475,8 +494,12 @@ static int mips_32bitmode = 0;
 #define hilo_interlocks \
   (mips_opts.isa == ISA_MIPS32                        \
    || mips_opts.isa == ISA_MIPS32R2                   \
+   || mips_opts.isa == ISA_MIPS32R3                   \
+   || mips_opts.isa == ISA_MIPS32R5                   \
    || mips_opts.isa == ISA_MIPS64                     \
    || mips_opts.isa == ISA_MIPS64R2                   \
+   || mips_opts.isa == ISA_MIPS64R3                   \
+   || mips_opts.isa == ISA_MIPS64R5                   \
    || mips_opts.arch == CPU_R4010                     \
    || mips_opts.arch == CPU_R5900                     \
    || mips_opts.arch == CPU_R10000                    \
@@ -1319,7 +1342,11 @@ enum options
     OPTION_MIPS32,
     OPTION_MIPS64,
     OPTION_MIPS32R2,
+    OPTION_MIPS32R3,
+    OPTION_MIPS32R5,
     OPTION_MIPS64R2,
+    OPTION_MIPS64R3,
+    OPTION_MIPS64R5,
     OPTION_MIPS16,
     OPTION_NO_MIPS16,
     OPTION_MIPS3D,
@@ -1340,6 +1367,8 @@ enum options
     OPTION_NO_DSPR2,
     OPTION_EVA,
     OPTION_NO_EVA,
+    OPTION_XPA,
+    OPTION_NO_XPA,
     OPTION_MICROMIPS,
     OPTION_NO_MICROMIPS,
     OPTION_MCU,
@@ -1422,7 +1451,11 @@ struct option md_longopts[] =
   {"mips32", no_argument, NULL, OPTION_MIPS32},
   {"mips64", no_argument, NULL, OPTION_MIPS64},
   {"mips32r2", no_argument, NULL, OPTION_MIPS32R2},
+  {"mips32r3", no_argument, NULL, OPTION_MIPS32R3},
+  {"mips32r5", no_argument, NULL, OPTION_MIPS32R5},
   {"mips64r2", no_argument, NULL, OPTION_MIPS64R2},
+  {"mips64r3", no_argument, NULL, OPTION_MIPS64R3},
+  {"mips64r5", no_argument, NULL, OPTION_MIPS64R5},
 
   /* Options which specify Application Specific Extensions (ASEs).  */
   {"mips16", no_argument, NULL, OPTION_MIPS16},
@@ -1449,6 +1482,8 @@ struct option md_longopts[] =
   {"mno-virt", no_argument, NULL, OPTION_NO_VIRT},
   {"mmsa", no_argument, NULL, OPTION_MSA},
   {"mno-msa", no_argument, NULL, OPTION_NO_MSA},
+  {"mxpa", no_argument, NULL, OPTION_XPA},
+  {"mno-xpa", no_argument, NULL, OPTION_NO_XPA},
 
   /* Old-style architecture options.  Don't add more of these.  */
   {"m4650", no_argument, NULL, OPTION_M4650},
@@ -1601,7 +1636,11 @@ static const struct mips_ase mips_ases[] = {
 
   { "msa", ASE_MSA, ASE_MSA64,
     OPTION_MSA, OPTION_NO_MSA,
-    2, 2, 2, 2 }
+    2, 2, 2, 2 },
+
+  { "xpa", ASE_XPA, 0,
+    OPTION_XPA, OPTION_NO_XPA,
+    2, 2, -1, -1 }
 };
 
 /* The set of ASEs that require -mfp64.  */
@@ -1855,6 +1894,12 @@ mips_isa_rev (void)
   if (mips_opts.isa == ISA_MIPS32R2 || mips_opts.isa == ISA_MIPS64R2)
     return 2;
 
+  if (mips_opts.isa == ISA_MIPS32R3 || mips_opts.isa == ISA_MIPS64R3)
+    return 3;
+
+  if (mips_opts.isa == ISA_MIPS32R5 || mips_opts.isa == ISA_MIPS64R5)
+    return 5;
+
   /* microMIPS implies revision 2 or above.  */
   if (mips_opts.micromips)
     return 2;
@@ -1907,7 +1952,7 @@ mips_check_isa_supports_ase (const struct mips_ase *ase)
 		 ase->name, base, size, min_rev);
     }
   if ((ase->flags & FP64_ASES)
-      && mips_opts.fp32
+      && mips_opts.fp != 64
       && (warned_fp32 & ase->flags) != ase->flags)
     {
       warned_fp32 |= ase->flags;
@@ -3338,7 +3383,7 @@ md_begin (void)
       g_switch_value = 0;
     }
 
-  if (! bfd_set_arch_mach (stdoutput, bfd_arch_mips, file_mips_arch))
+  if (! bfd_set_arch_mach (stdoutput, bfd_arch_mips, file_mips_opts.arch))
     as_warn (_("could not set architecture and machine"));
 
   op_hash = hash_new ();
@@ -13500,39 +13545,55 @@ md_parse_option (int c, char *arg)
       break;
 
     case OPTION_MIPS1:
-      file_mips_isa = ISA_MIPS1;
+      file_mips_opts.isa = ISA_MIPS1;
       break;
 
     case OPTION_MIPS2:
-      file_mips_isa = ISA_MIPS2;
+      file_mips_opts.isa = ISA_MIPS2;
       break;
 
     case OPTION_MIPS3:
-      file_mips_isa = ISA_MIPS3;
+      file_mips_opts.isa = ISA_MIPS3;
       break;
 
     case OPTION_MIPS4:
-      file_mips_isa = ISA_MIPS4;
+      file_mips_opts.isa = ISA_MIPS4;
       break;
 
     case OPTION_MIPS5:
-      file_mips_isa = ISA_MIPS5;
+      file_mips_opts.isa = ISA_MIPS5;
       break;
 
     case OPTION_MIPS32:
-      file_mips_isa = ISA_MIPS32;
+      file_mips_opts.isa = ISA_MIPS32;
       break;
 
     case OPTION_MIPS32R2:
-      file_mips_isa = ISA_MIPS32R2;
+      file_mips_opts.isa = ISA_MIPS32R2;
+      break;
+
+    case OPTION_MIPS32R3:
+      file_mips_opts.isa = ISA_MIPS32R3;
+      break;
+
+    case OPTION_MIPS32R5:
+      file_mips_opts.isa = ISA_MIPS32R5;
       break;
 
     case OPTION_MIPS64R2:
-      file_mips_isa = ISA_MIPS64R2;
+      file_mips_opts.isa = ISA_MIPS64R2;
+      break;
+
+    case OPTION_MIPS64R3:
+      file_mips_opts.isa = ISA_MIPS64R3;
+      break;
+
+    case OPTION_MIPS64R5:
+      file_mips_opts.isa = ISA_MIPS64R5;
       break;
 
     case OPTION_MIPS64:
-      file_mips_isa = ISA_MIPS64;
+      file_mips_opts.isa = ISA_MIPS64;
       break;
 
     case OPTION_MTUNE:
@@ -13740,35 +13801,35 @@ md_parse_option (int c, char *arg)
       break;
 
     case OPTION_GP32:
-      file_mips_gp32 = 1;
+      file_mips_opts.gp32 = 1;
       break;
 
     case OPTION_GP64:
-      file_mips_gp32 = 0;
+      file_mips_opts.gp32 = 0;
       break;
 
     case OPTION_FP32:
-      file_mips_fp32 = 1;
+      file_mips_opts.fp = 32;
       break;
 
     case OPTION_FP64:
-      file_mips_fp32 = 0;
+      file_mips_opts.fp = 64;
       break;
 
     case OPTION_SINGLE_FLOAT:
-      file_mips_single_float = 1;
+      file_mips_opts.single_float = 1;
       break;
 
     case OPTION_DOUBLE_FLOAT:
-      file_mips_single_float = 0;
+      file_mips_opts.single_float = 0;
       break;
 
     case OPTION_SOFT_FLOAT:
-      file_mips_soft_float = 1;
+      file_mips_opts.soft_float = 1;
       break;
 
     case OPTION_HARD_FLOAT:
-      file_mips_soft_float = 0;
+      file_mips_opts.soft_float = 0;
       break;
 
     case OPTION_MABI:
@@ -13851,7 +13912,7 @@ mips_set_architecture (const struct mips_cpu_info *info)
 {
   if (info != 0)
     {
-      file_mips_arch = info->cpu;
+      file_mips_opts.arch = info->cpu;
       mips_opts.arch = info->cpu;
       mips_opts.isa = info->isa;
     }
@@ -13893,9 +13954,9 @@ mips_after_parse_args (void)
   if (mips_arch_string != 0)
     arch_info = mips_parse_cpu ("-march", mips_arch_string);
 
-  if (file_mips_isa != ISA_UNKNOWN)
+  if (file_mips_opts.isa != ISA_UNKNOWN)
     {
-      /* Handle -mipsN.  At this point, file_mips_isa contains the
+      /* Handle -mipsN.  At this point, file_mips_opts.isa contains the
 	 ISA level specified by -mipsN, while arch_info->isa contains
 	 the -march selection (if any).  */
       if (arch_info != 0)
@@ -13903,14 +13964,14 @@ mips_after_parse_args (void)
 	  /* -march takes precedence over -mipsN, since it is more descriptive.
 	     There's no harm in specifying both as long as the ISA levels
 	     are the same.  */
-	  if (file_mips_isa != arch_info->isa)
+	  if (file_mips_opts.isa != arch_info->isa)
 	    as_bad (_("-%s conflicts with the other architecture options,"
 		      " which imply -%s"),
-		    mips_cpu_info_from_isa (file_mips_isa)->name,
+		    mips_cpu_info_from_isa (file_mips_opts.isa)->name,
 		    mips_cpu_info_from_isa (arch_info->isa)->name);
 	}
       else
-	arch_info = mips_cpu_info_from_isa (file_mips_isa);
+	arch_info = mips_cpu_info_from_isa (file_mips_opts.isa);
     }
 
   if (arch_info == 0)
@@ -13925,7 +13986,8 @@ mips_after_parse_args (void)
 
   mips_set_architecture (arch_info);
 
-  /* Optimize for file_mips_arch, unless -mtune selects a different processor.  */
+  /* Optimize for file_mips_opts.arch, unless -mtune selects a different
+     processor.  */
   if (mips_tune_string != 0)
     tune_info = mips_parse_cpu ("-mtune", mips_tune_string);
 
@@ -13934,15 +13996,15 @@ mips_after_parse_args (void)
   else
     mips_set_tune (tune_info);
 
-  if (file_mips_gp32 >= 0)
+  if (file_mips_opts.gp32 >= 0)
     {
       /* The user specified the size of the integer registers.  Make sure
 	 it agrees with the ABI and ISA.  */
-      if (file_mips_gp32 == 0 && !ISA_HAS_64BIT_REGS (mips_opts.isa))
+      if (file_mips_opts.gp32 == 0 && !ISA_HAS_64BIT_REGS (mips_opts.isa))
 	as_bad (_("-mgp64 used with a 32-bit processor"));
-      else if (file_mips_gp32 == 1 && ABI_NEEDS_64BIT_REGS (mips_abi))
+      else if (file_mips_opts.gp32 == 1 && ABI_NEEDS_64BIT_REGS (mips_abi))
 	as_bad (_("-mgp32 used with a 64-bit ABI"));
-      else if (file_mips_gp32 == 0 && ABI_NEEDS_32BIT_REGS (mips_abi))
+      else if (file_mips_opts.gp32 == 0 && ABI_NEEDS_32BIT_REGS (mips_abi))
 	as_bad (_("-mgp64 used with a 32-bit ABI"));
     }
   else
@@ -13950,11 +14012,11 @@ mips_after_parse_args (void)
       /* Infer the integer register size from the ABI and processor.
 	 Restrict ourselves to 32-bit registers if that's all the
 	 processor has, or if the ABI cannot handle 64-bit registers.  */
-      file_mips_gp32 = (ABI_NEEDS_32BIT_REGS (mips_abi)
-			|| !ISA_HAS_64BIT_REGS (mips_opts.isa));
+      file_mips_opts.gp32 = (ABI_NEEDS_32BIT_REGS (mips_abi)
+			     || !ISA_HAS_64BIT_REGS (mips_opts.isa));
     }
 
-  switch (file_mips_fp32)
+  switch (file_mips_opts.fp)
     {
     default:
     case -1:
@@ -13965,28 +14027,28 @@ mips_after_parse_args (void)
 	 registers would lead to spurious "register must be even" messages.
 	 So here we assume float registers are never smaller than the
 	 integer ones.  */
-      if (file_mips_gp32 == 0)
+      if (file_mips_opts.gp32 == 0)
 	/* 64-bit integer registers implies 64-bit float registers.  */
-	file_mips_fp32 = 0;
+	file_mips_opts.fp = 64;
       else if ((mips_opts.ase & FP64_ASES)
 	       && ISA_HAS_64BIT_FPRS (mips_opts.isa))
 	/* -mips3d and -mdmx imply 64-bit float registers, if possible.  */
-	file_mips_fp32 = 0;
+	file_mips_opts.fp = 64;
       else
 	/* 32-bit float registers.  */
-	file_mips_fp32 = 1;
+	file_mips_opts.fp = 32;
       break;
 
     /* The user specified the size of the float registers.  Check if it
        agrees with the ABI and ISA.  */
-    case 0:
+    case 64:
       if (!ISA_HAS_64BIT_FPRS (mips_opts.isa))
 	as_bad (_("-mfp64 used with a 32-bit fpu"));
       else if (ABI_NEEDS_32BIT_REGS (mips_abi)
 	       && !ISA_HAS_MXHC1 (mips_opts.isa))
 	as_warn (_("-mfp64 used with a 32-bit ABI"));
       break;
-    case 1:
+    case 32:
       if (ABI_NEEDS_64BIT_REGS (mips_abi))
 	as_warn (_("-mfp32 used with a 64-bit ABI"));
       break;
@@ -13997,7 +14059,7 @@ mips_after_parse_args (void)
   /* This flag is set when we have a 64-bit capable CPU but use only
      32-bit wide registers.  Note that EABI does not use it.  */
   if (ISA_HAS_64BIT_REGS (mips_opts.isa)
-      && ((mips_abi == NO_ABI && file_mips_gp32 == 1)
+      && ((mips_abi == NO_ABI && file_mips_opts.gp32 == 1)
 	  || mips_abi == O32_ABI))
     mips_32bitmode = 1;
 
@@ -14007,25 +14069,26 @@ mips_after_parse_args (void)
   /* If the selected architecture includes support for ASEs, enable
      generation of code for them.  */
   if (mips_opts.mips16 == -1)
-    mips_opts.mips16 = (CPU_HAS_MIPS16 (file_mips_arch)) ? 1 : 0;
+    mips_opts.mips16 = (CPU_HAS_MIPS16 (file_mips_opts.arch)) ? 1 : 0;
   if (mips_opts.micromips == -1)
-    mips_opts.micromips = (CPU_HAS_MICROMIPS (file_mips_arch)) ? 1 : 0;
+    mips_opts.micromips = (CPU_HAS_MICROMIPS (file_mips_opts.arch))
+			   ? 1 : 0;
 
   /* MIPS3D and MDMX require 64-bit FPRs, so -mfp32 should stop those
      ASEs from being selected implicitly.  */
-  if (file_mips_fp32 == 1)
+  if (file_mips_opts.fp != 64)
     file_ase_explicit |= ASE_MIPS3D | ASE_MDMX;
 
   /* If the user didn't explicitly select or deselect a particular ASE,
      use the default setting for the CPU.  */
   mips_opts.ase |= (arch_info->ase & ~file_ase_explicit);
 
-  file_mips_isa = mips_opts.isa;
-  file_ase = mips_opts.ase;
-  mips_opts.gp32 = file_mips_gp32;
-  mips_opts.fp32 = file_mips_fp32;
-  mips_opts.soft_float = file_mips_soft_float;
-  mips_opts.single_float = file_mips_single_float;
+  file_mips_opts.isa = mips_opts.isa;
+  file_mips_opts.ase = mips_opts.ase;
+  mips_opts.gp32 = file_mips_opts.gp32;
+  mips_opts.fp = file_mips_opts.fp;
+  mips_opts.soft_float = file_mips_opts.soft_float;
+  mips_opts.single_float = file_mips_opts.single_float;
 
   mips_check_isa_supports_ases ();
 
@@ -14059,15 +14122,7 @@ md_pcrel_from (fixS *fixP)
       /* Return the address of the delay slot.  */
       return addr + 4;
 
-    case BFD_RELOC_32_PCREL:
-      return addr;
-
     default:
-      /* We have no relocation type for PC relative MIPS16 instructions.  */
-      if (fixP->fx_addsy && S_GET_SEGMENT (fixP->fx_addsy) != now_seg)
-	as_bad_where (fixP->fx_file, fixP->fx_line,
-		      _("PC relative MIPS16 instruction references"
-			" a different section"));
       return addr;
     }
 }
@@ -14264,13 +14319,38 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
   unsigned long insn;
   reloc_howto_type *howto;
 
-  /* We ignore generic BFD relocations we don't know about.  */
-  howto = bfd_reloc_type_lookup (stdoutput, fixP->fx_r_type);
-  if (! howto)
-    return;
+  if (fixP->fx_pcrel)
+    switch (fixP->fx_r_type)
+      {
+      case BFD_RELOC_16_PCREL_S2:
+      case BFD_RELOC_MICROMIPS_7_PCREL_S1:
+      case BFD_RELOC_MICROMIPS_10_PCREL_S1:
+      case BFD_RELOC_MICROMIPS_16_PCREL_S1:
+      case BFD_RELOC_32_PCREL:
+	break;
+
+      case BFD_RELOC_32:
+	fixP->fx_r_type = BFD_RELOC_32_PCREL;
+	break;
+
+      default:
+	as_bad_where (fixP->fx_file, fixP->fx_line,
+		      _("PC-relative reference to a different section"));
+	break;
+      }
+
+  /* Handle BFD_RELOC_8, since it's easy.  Punt on other bfd relocations
+     that have no MIPS ELF equivalent.  */
+  if (fixP->fx_r_type != BFD_RELOC_8)
+    {
+      howto = bfd_reloc_type_lookup (stdoutput, fixP->fx_r_type);
+      if (!howto)
+	return;
+    }
 
   gas_assert (fixP->fx_size == 2
 	      || fixP->fx_size == 4
+	      || fixP->fx_r_type == BFD_RELOC_8
 	      || fixP->fx_r_type == BFD_RELOC_16
 	      || fixP->fx_r_type == BFD_RELOC_64
 	      || fixP->fx_r_type == BFD_RELOC_CTOR
@@ -14281,12 +14361,6 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 	      || fixP->fx_r_type == BFD_RELOC_MIPS_TLS_DTPREL64);
 
   buf = fixP->fx_frag->fr_literal + fixP->fx_where;
-
-  gas_assert (!fixP->fx_pcrel || fixP->fx_r_type == BFD_RELOC_16_PCREL_S2
-	      || fixP->fx_r_type == BFD_RELOC_MICROMIPS_7_PCREL_S1
-	      || fixP->fx_r_type == BFD_RELOC_MICROMIPS_10_PCREL_S1
-	      || fixP->fx_r_type == BFD_RELOC_MICROMIPS_16_PCREL_S1
-	      || fixP->fx_r_type == BFD_RELOC_32_PCREL);
 
   /* Don't treat parts of a composite relocation as done.  There are two
      reasons for this:
@@ -14437,6 +14511,7 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
     case BFD_RELOC_32:
     case BFD_RELOC_32_PCREL:
     case BFD_RELOC_16:
+    case BFD_RELOC_8:
       /* If we are deleting this reloc entry, we must fill in the
 	 value now.  This can happen if we have a .word which is not
 	 resolved when it appears but is later defined.  */
@@ -14969,7 +15044,7 @@ s_mipsset (int x ATTRIBUTE_UNUSED)
       mips_opts.nobopt = 1;
     }
   else if (strcmp (name, "gp=default") == 0)
-    mips_opts.gp32 = file_mips_gp32;
+    mips_opts.gp32 = file_mips_opts.gp32;
   else if (strcmp (name, "gp=32") == 0)
     mips_opts.gp32 = 1;
   else if (strcmp (name, "gp=64") == 0)
@@ -14980,15 +15055,15 @@ s_mipsset (int x ATTRIBUTE_UNUSED)
       mips_opts.gp32 = 0;
     }
   else if (strcmp (name, "fp=default") == 0)
-    mips_opts.fp32 = file_mips_fp32;
+    mips_opts.fp = file_mips_opts.fp;
   else if (strcmp (name, "fp=32") == 0)
-    mips_opts.fp32 = 1;
+    mips_opts.fp = 32;
   else if (strcmp (name, "fp=64") == 0)
     {
       if (!ISA_HAS_64BIT_FPRS (mips_opts.isa))
 	as_warn (_("%s isa does not support 64-bit floating point registers"),
 		 mips_cpu_info_from_isa (mips_opts.isa)->name);
-      mips_opts.fp32 = 0;
+      mips_opts.fp = 64;
     }
   else if (strcmp (name, "softfloat") == 0)
     mips_opts.soft_float = 1;
@@ -15031,8 +15106,8 @@ s_mipsset (int x ATTRIBUTE_UNUSED)
       if (strcmp (name, "mips0") == 0 || strcmp (name, "arch=default") == 0)
 	{
 	  reset = 1;
-	  mips_opts.isa = file_mips_isa;
-	  mips_opts.arch = file_mips_arch;
+	  mips_opts.isa = file_mips_opts.isa;
+	  mips_opts.arch = file_mips_opts.arch;
 	}
       else if (strncmp (name, "arch=", 5) == 0)
 	{
@@ -15071,22 +15146,26 @@ s_mipsset (int x ATTRIBUTE_UNUSED)
 	case ISA_MIPS2:
 	case ISA_MIPS32:
 	case ISA_MIPS32R2:
+	case ISA_MIPS32R3:
+	case ISA_MIPS32R5:
 	  mips_opts.gp32 = 1;
-	  mips_opts.fp32 = 1;
+	  mips_opts.fp = 32;
 	  break;
 	case ISA_MIPS3:
 	case ISA_MIPS4:
 	case ISA_MIPS5:
 	case ISA_MIPS64:
 	case ISA_MIPS64R2:
+	case ISA_MIPS64R3:
+	case ISA_MIPS64R5:
 	  mips_opts.gp32 = 0;
 	  if (mips_opts.arch == CPU_R5900)
 	    {
-		mips_opts.fp32 = 1;
+		mips_opts.fp = 32;
 	    }
 	  else
 	    {
-	  mips_opts.fp32 = 0;
+	  mips_opts.fp = 64;
 	    }
 	  break;
 	default:
@@ -15095,8 +15174,8 @@ s_mipsset (int x ATTRIBUTE_UNUSED)
 	}
       if (reset)
 	{
-	  mips_opts.gp32 = file_mips_gp32;
-	  mips_opts.fp32 = file_mips_fp32;
+	  mips_opts.gp32 = file_mips_opts.gp32;
+	  mips_opts.fp = file_mips_opts.fp;
 	}
     }
   else if (strcmp (name, "autoextend") == 0)
@@ -17320,7 +17399,7 @@ mips_elf_final_processing (void)
     elf_elfheader (stdoutput)->e_flags |= E_MIPS_ABI_O64;
   else if (mips_abi == EABI_ABI)
     {
-      if (!file_mips_gp32)
+      if (!file_mips_opts.gp32)
 	elf_elfheader (stdoutput)->e_flags |= E_MIPS_ABI_EABI64;
       else
 	elf_elfheader (stdoutput)->e_flags |= E_MIPS_ABI_EABI32;
@@ -17337,7 +17416,7 @@ mips_elf_final_processing (void)
     elf_elfheader (stdoutput)->e_flags |= EF_MIPS_NAN2008;
 
   /* 32 bit code with 64 bit FP registers.  */
-  if (!file_mips_fp32 && ABI_NEEDS_32BIT_REGS (mips_abi))
+  if (file_mips_opts.fp == 64 && ABI_NEEDS_32BIT_REGS (mips_abi))
     elf_elfheader (stdoutput)->e_flags |= EF_MIPS_FP64;
 }
 
@@ -17788,8 +17867,12 @@ static const struct mips_cpu_info mips_cpu_info_table[] =
   { "mips5",          MIPS_CPU_IS_ISA, 0,	ISA_MIPS5,    CPU_MIPS5 },
   { "mips32",         MIPS_CPU_IS_ISA, 0,	ISA_MIPS32,   CPU_MIPS32 },
   { "mips32r2",       MIPS_CPU_IS_ISA, 0,	ISA_MIPS32R2, CPU_MIPS32R2 },
+  { "mips32r3",       MIPS_CPU_IS_ISA, 0,	ISA_MIPS32R3, CPU_MIPS32R3 },
+  { "mips32r5",       MIPS_CPU_IS_ISA, 0,	ISA_MIPS32R5, CPU_MIPS32R5 },
   { "mips64",         MIPS_CPU_IS_ISA, 0,	ISA_MIPS64,   CPU_MIPS64 },
   { "mips64r2",       MIPS_CPU_IS_ISA, 0,	ISA_MIPS64R2, CPU_MIPS64R2 },
+  { "mips64r3",       MIPS_CPU_IS_ISA, 0,	ISA_MIPS64R3, CPU_MIPS64R3 },
+  { "mips64r5",       MIPS_CPU_IS_ISA, 0,	ISA_MIPS64R5, CPU_MIPS64R5 },
 
   /* MIPS I */
   { "r3000",          0, 0,			ISA_MIPS1,    CPU_R3000 },
@@ -17892,6 +17975,8 @@ static const struct mips_cpu_info mips_cpu_info_table[] =
   { "1004kf2_1",      0, ASE_DSP | ASE_MT,	ISA_MIPS32R2, CPU_MIPS32R2 },
   { "1004kf",         0, ASE_DSP | ASE_MT,	ISA_MIPS32R2, CPU_MIPS32R2 },
   { "1004kf1_1",      0, ASE_DSP | ASE_MT,	ISA_MIPS32R2, CPU_MIPS32R2 },
+  /* P5600 with EVA and Virtualization ASEs, other ASEs are optional.  */
+  { "p5600",          0, ASE_VIRT | ASE_EVA | ASE_XPA, 	ISA_MIPS32R5, CPU_MIPS32R5 },
 
   /* MIPS 64 */
   { "5kc",            0, 0,			ISA_MIPS64,   CPU_MIPS64 },
@@ -17904,7 +17989,7 @@ static const struct mips_cpu_info mips_cpu_info_table[] =
   /* Broadcom SB-1A CPU core */
   { "sb1a",           0, ASE_MIPS3D | ASE_MDMX,	ISA_MIPS64,   CPU_SB1 },
   
-  { "loongson3a",     0, 0,			ISA_MIPS64,   CPU_LOONGSON_3A },
+  { "loongson3a",     0, 0,			ISA_MIPS64R2, CPU_LOONGSON_3A },
 
   /* MIPS 64 Release 2 */
 
@@ -18005,8 +18090,9 @@ mips_parse_cpu (const char *option, const char *cpu_string)
       if (ABI_NEEDS_64BIT_REGS (mips_abi))
 	return mips_cpu_info_from_isa (ISA_MIPS3);
 
-      if (file_mips_gp32 >= 0)
-	return mips_cpu_info_from_isa (file_mips_gp32 ? ISA_MIPS1 : ISA_MIPS3);
+      if (file_mips_opts.gp32 >= 0)
+	return mips_cpu_info_from_isa (file_mips_opts.gp32
+				       ? ISA_MIPS1 : ISA_MIPS3);
 
       return mips_cpu_info_from_isa (MIPS_DEFAULT_64BIT
 				     ? ISA_MIPS3
@@ -18100,8 +18186,12 @@ MIPS options:\n\
 -mips5                  generate MIPS ISA V instructions\n\
 -mips32                 generate MIPS32 ISA instructions\n\
 -mips32r2               generate MIPS32 release 2 ISA instructions\n\
+-mips32r3               generate MIPS32 release 3 ISA instructions\n\
+-mips32r5               generate MIPS32 release 5 ISA instructions\n\
 -mips64                 generate MIPS64 ISA instructions\n\
 -mips64r2               generate MIPS64 release 2 ISA instructions\n\
+-mips64r3               generate MIPS64 release 3 ISA instructions\n\
+-mips64r5               generate MIPS64 release 5 ISA instructions\n\
 -march=CPU/-mtune=CPU	generate code/schedule for CPU, where CPU is one of:\n"));
 
   first = 1;
@@ -18148,6 +18238,9 @@ MIPS options:\n\
   fprintf (stream, _("\
 -mmsa			generate MSA instructions\n\
 -mno-msa		do not generate MSA instructions\n"));
+  fprintf (stream, _("\
+-mxpa			generate eXtended Physical Address (XPA) instructions\n\
+-mno-xpa		do not generate eXtended Physical Address (XPA) instructions\n"));
   fprintf (stream, _("\
 -mvirt			generate Virtualization instructions\n\
 -mno-virt		do not generate Virtualization instructions\n"));
@@ -18248,4 +18341,35 @@ tc_mips_regname_to_dw2regnum (char *regname)
     regnum = reg;
 
   return regnum;
+}
+
+/* Implement CONVERT_SYMBOLIC_ATTRIBUTE.
+   Given a symbolic attribute NAME, return the proper integer value.
+   Returns -1 if the attribute is not known.  */
+
+int
+mips_convert_symbolic_attribute (const char *name)
+{
+  static const struct
+  {
+    const char * name;
+    const int    tag;
+  }
+  attribute_table[] =
+    {
+#define T(tag) {#tag, tag}
+      T (Tag_GNU_MIPS_ABI_FP),
+      T (Tag_GNU_MIPS_ABI_MSA),
+#undef T
+    };
+  unsigned int i;
+
+  if (name == NULL)
+    return -1;
+
+  for (i = 0; i < ARRAY_SIZE (attribute_table); i++)
+    if (streq (name, attribute_table[i].name))
+      return attribute_table[i].tag;
+
+  return -1;
 }
