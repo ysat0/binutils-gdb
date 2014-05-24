@@ -1164,7 +1164,9 @@ Run @value{GDBN} using @var{directory} as its working directory,
 instead of the current directory.
 
 @item -data-directory @var{directory}
+@itemx -D @var{directory}
 @cindex @code{--data-directory}
+@cindex @code{-D}
 Run @value{GDBN} using @var{directory} as its data directory.
 The data directory is where @value{GDBN} searches for its
 auxiliary files.  @xref{Data Files}.
@@ -2145,6 +2147,57 @@ caused by something odd in your shell's non-interactive mode
 initialization file---such as @file{.cshrc} for C-shell,
 $@file{.zshenv} for the Z shell, or the file specified in the
 @samp{BASH_ENV} environment variable for BASH.
+
+@anchor{set auto-connect-native-target}
+@kindex set auto-connect-native-target
+@item set auto-connect-native-target
+@itemx set auto-connect-native-target on
+@itemx set auto-connect-native-target off
+@itemx show auto-connect-native-target
+
+By default, if not connected to any target yet (e.g., with
+@code{target remote}), the @code{run} command starts your program as a
+native process under @value{GDBN}, on your local machine.  If you're
+sure you don't want to debug programs on your local machine, you can
+tell @value{GDBN} to not connect to the native target automatically
+with the @code{set auto-connect-native-target off} command.
+
+If @code{on}, which is the default, and if @value{GDBN} is not
+connected to a target already, the @code{run} command automaticaly
+connects to the native target, if one is available.
+
+If @code{off}, and if @value{GDBN} is not connected to a target
+already, the @code{run} command fails with an error:
+
+@smallexample
+(@value{GDBP}) run
+Don't know how to run.  Try "help target".
+@end smallexample
+
+If @value{GDBN} is already connected to a target, @value{GDBN} always
+uses it with the @code{run} command.
+
+In any case, you can explicitly connect to the native target with the
+@code{target native} command.  For example,
+
+@smallexample
+(@value{GDBP}) set auto-connect-native-target off
+(@value{GDBP}) run
+Don't know how to run.  Try "help target".
+(@value{GDBP}) target native
+(@value{GDBP}) run
+Starting program: ./a.out
+[Inferior 1 (process 10421) exited normally]
+@end smallexample
+
+In case you connected explicitly to the @code{native} target,
+@value{GDBN} remains connected even if all inferiors exit, ready for
+the next @code{run} command.  Use the @code{disconnect} command to
+disconnect.
+
+Examples of other commands that likewise respect the
+@code{auto-connect-native-target} setting: @code{attach}, @code{info
+proc}, @code{info os}.
 
 @kindex set disable-randomization
 @item set disable-randomization
@@ -6398,6 +6451,28 @@ results.
 @item show record full memory-query
 Show the current setting of @code{memory-query}.
 
+@kindex set record btrace
+The @code{btrace} record target does not trace data.  As a
+convenience, when replaying, @value{GDBN} reads read-only memory off
+the live program directly, assuming that the addresses of the
+read-only areas don't change.  This for example makes it possible to
+disassemble code while replaying, but not to print variables.
+In some cases, being able to inspect variables might be useful.
+You can use the following command for that:
+
+@item set record btrace replay-memory-access
+Control the behavior of the @code{btrace} recording method when
+accessing memory during replay.  If @code{read-only} (the default),
+@value{GDBN} will only allow accesses to read-only memory.
+If @code{read-write}, @value{GDBN} will allow accesses to read-only
+and to read-write memory.  Beware that the accessed memory corresponds
+to the live target and not necessarily to the current replay
+position.
+
+@kindex show record btrace
+@item show record btrace replay-memory-access
+Show the current setting of @code{replay-memory-access}.
+
 @kindex info record
 @item info record
 Show various statistics about the recording depending on the recording
@@ -8763,23 +8838,28 @@ are from the last memory unit printed; this is not the same as the last
 address printed if several units were printed on the last line of output.
 
 @cindex remote memory comparison
+@cindex target memory comparison
 @cindex verify remote memory image
+@cindex verify target memory image
 When you are debugging a program running on a remote target machine
-(@pxref{Remote Debugging}), you may wish to verify the program's image in the
-remote machine's memory against the executable file you downloaded to
-the target.  The @code{compare-sections} command is provided for such
-situations.
+(@pxref{Remote Debugging}), you may wish to verify the program's image
+in the remote machine's memory against the executable file you
+downloaded to the target.  Or, on any target, you may want to check
+whether the program has corrupted its own read-only sections.  The
+@code{compare-sections} command is provided for such situations.
 
 @table @code
 @kindex compare-sections
 @item compare-sections @r{[}@var{section-name}@r{|}@code{-r}@r{]}
 Compare the data of a loadable section @var{section-name} in the
 executable file of the program being debugged with the same section in
-the remote machine's memory, and report any mismatches.  With no
+the target machine's memory, and report any mismatches.  With no
 arguments, compares all loadable sections.  With an argument of
-@code{-r}, compares all loadable read-only sections.  This command's
-availability depends on the target's support for the @code{"qCRC"}
-remote request.
+@code{-r}, compares all loadable read-only sections.
+
+Note: for remote targets, this command can be accelerated if the
+target supports computing the CRC checksum of a block of memory
+(@pxref{qCRC packet}).
 @end table
 
 @node Auto Display
@@ -17577,11 +17657,10 @@ the final result is inverted to ensure trailing zeros also affect the
 CRC.
 
 @emph{Note:} This is the same CRC polynomial as used in handling the
-@dfn{Remote Serial Protocol} @code{qCRC} packet (@pxref{Remote Protocol,
-, @value{GDBN} Remote Serial Protocol}).  However in the
-case of the Remote Serial Protocol, the CRC is computed @emph{most}
-significant bit first, and the result is not inverted, so trailing
-zeros have no effect on the CRC value.
+@dfn{Remote Serial Protocol} @code{qCRC} packet (@pxref{qCRC packet}).
+However in the case of the Remote Serial Protocol, the CRC is computed
+@emph{most} significant bit first, and the result is not inverted, so
+trailing zeros have no effect on the CRC value.
 
 To complete the description, we show below the code of the function
 which produces the CRC used in @code{.gnu_debuglink}.  Inverting the
@@ -18072,6 +18151,13 @@ drivers, or even basic I/O is available, although some simulators do
 provide these.  For info about any processor-specific simulator details,
 see the appropriate section in @ref{Embedded Processors, ,Embedded
 Processors}.
+
+@item target native
+@cindex native target
+Setup for local/native process debugging.  Useful to make the
+@code{run} command spawn native processes (likewise @code{attach},
+etc.@:) even when @code{set auto-connect-native-target} is @code{off}
+(@pxref{set auto-connect-native-target}).
 
 @end table
 
@@ -34720,6 +34806,7 @@ Any other reply implies the old thread ID.
 @item qCRC:@var{addr},@var{length}
 @cindex CRC of memory block, remote request
 @cindex @samp{qCRC} packet
+@anchor{qCRC packet}
 Compute the CRC checksum of a block of memory using CRC-32 defined in
 IEEE 802.3.  The CRC is computed byte at a time, taking the most
 significant bit of each byte first.  The initial pattern code
@@ -34803,6 +34890,12 @@ ids (using the @samp{qs} form of the query), until the target responds
 with @samp{l} (lower-case ell, for @dfn{last}).
 Refer to @ref{thread-id syntax}, for the format of the @var{thread-id}
 fields.
+
+@emph{Note: @value{GDBN} will send the @code{qfThreadInfo} query during the
+initial connection with the remote target, and the very first thread ID
+mentioned in the reply will be stopped by @value{GDBN} in a subsequent
+message.  Therefore, the stub should ensure that the first thread ID in
+the @code{qfThreadInfo} reply is suitable for being stopped by @value{GDBN}.}
 
 @item qGetTLSAddr:@var{thread-id},@var{offset},@var{lm}
 @cindex get thread-local storage address, remote request
