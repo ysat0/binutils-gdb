@@ -26,7 +26,6 @@
 #include "command.h"
 #include "observer.h"
 #include "objfiles.h"
-#include "exceptions.h"
 #include "cli/cli-script.h"
 #include "gdbcmd.h"
 #include "cli/cli-cmds.h"
@@ -316,6 +315,22 @@ Use 'set auto-load safe-path /' for disabling the auto-load safe-path security.\
   auto_load_safe_path = s;
 
   auto_load_safe_path_vec_update ();
+}
+
+/* "add-auto-load-scripts-directory" command for the auto_load_dir configuration
+   variable.  */
+
+static void
+add_auto_load_dir (char *args, int from_tty)
+{
+  char *s;
+
+  if (args == NULL || *args == 0)
+    error (_("Directory argument required."));
+
+  s = xstrprintf ("%s%c%s", auto_load_dir, DIRNAME_SEPARATOR, args);
+  xfree (auto_load_dir);
+  auto_load_dir = s;
 }
 
 /* Implementation for filename_is_in_pattern overwriting the caller's FILENAME
@@ -778,17 +793,17 @@ auto_load_objfile_script_1 (struct objfile *objfile, const char *realname,
       make_cleanup_fclose (input);
 
       is_safe
-	= file_is_auto_load_safe (filename,
+	= file_is_auto_load_safe (debugfile,
 				  _("auto-load: Loading %s script \"%s\""
 				    " by extension for objfile \"%s\".\n"),
 				  ext_lang_name (language),
-				  filename, objfile_name (objfile));
+				  debugfile, objfile_name (objfile));
 
       /* Add this script to the hash table too so
 	 "info auto-load ${lang}-scripts" can print it.  */
       pspace_info
 	= get_auto_load_pspace_data_for_loading (current_program_space);
-      maybe_add_script (pspace_info, is_safe, filename, filename, language);
+      maybe_add_script (pspace_info, is_safe, debugfile, debugfile, language);
 
       /* To preserve existing behaviour we don't check for whether the
 	 script was already in the table, and always load it.
@@ -1524,6 +1539,15 @@ This options has security implications for untrusted inferiors."),
 		   "to auto-load files.\n\
 See the commands 'set auto-load safe-path' and 'show auto-load safe-path' to\n\
 access the current full list setting."),
+		 &cmdlist);
+  set_cmd_completer (cmd, filename_completer);
+
+  cmd = add_cmd ("add-auto-load-scripts-directory", class_support,
+		 add_auto_load_dir,
+		 _("Add entries to the list of directories from which to load "
+		   "auto-loaded scripts.\n\
+See the commands 'set auto-load scripts-directory' and\n\
+'show auto-load scripts-directory' to access the current full list setting."),
 		 &cmdlist);
   set_cmd_completer (cmd, filename_completer);
 

@@ -1,7 +1,5 @@
 /* Target definitions for NN-bit ELF
-   Copyright 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002,
-   2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1993-2014 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -51,6 +49,9 @@
 #ifndef bfd_elfNN_find_nearest_line
 #define bfd_elfNN_find_nearest_line	_bfd_elf_find_nearest_line
 #endif
+#ifndef bfd_elfNN_find_line
+#define bfd_elfNN_find_line		_bfd_elf_find_line
+#endif
 #ifndef bfd_elfNN_find_inliner_info
 #define bfd_elfNN_find_inliner_info	_bfd_elf_find_inliner_info
 #endif
@@ -64,6 +65,10 @@
 #endif
 #ifndef bfd_elfNN_get_symbol_info
 #define bfd_elfNN_get_symbol_info	_bfd_elf_get_symbol_info
+#endif
+#ifndef bfd_elfNN_get_symbol_version_string
+#define bfd_elfNN_get_symbol_version_string \
+  _bfd_elf_get_symbol_version_string
 #endif
 #define bfd_elfNN_canonicalize_symtab	_bfd_elf_canonicalize_symtab
 #define bfd_elfNN_get_symtab_upper_bound _bfd_elf_get_symtab_upper_bound
@@ -239,9 +244,6 @@
 #ifndef bfd_elfNN_bfd_link_hash_table_create
 #define bfd_elfNN_bfd_link_hash_table_create _bfd_elf_link_hash_table_create
 #endif
-#ifndef bfd_elfNN_bfd_link_hash_table_free
-#define bfd_elfNN_bfd_link_hash_table_free _bfd_elf_link_hash_table_free
-#endif
 #ifndef bfd_elfNN_bfd_link_add_symbols
 #define bfd_elfNN_bfd_link_add_symbols	bfd_elf_link_add_symbols
 #endif
@@ -257,9 +259,6 @@
 #ifndef bfd_elfNN_bfd_link_hash_table_create
 #define bfd_elfNN_bfd_link_hash_table_create \
   _bfd_generic_link_hash_table_create
-#endif
-#ifndef bfd_elfNN_bfd_link_hash_table_free
-#define bfd_elfNN_bfd_link_hash_table_free _bfd_generic_link_hash_table_free
 #endif
 #ifndef bfd_elfNN_bfd_link_add_symbols
 #define bfd_elfNN_bfd_link_add_symbols	_bfd_generic_link_add_symbols
@@ -536,6 +535,9 @@
 #ifndef elf_backend_count_relocs
 #define elf_backend_count_relocs		NULL
 #endif
+#ifndef elf_backend_sort_relocs_p
+#define elf_backend_sort_relocs_p		NULL
+#endif
 #ifndef elf_backend_grok_prstatus
 #define elf_backend_grok_prstatus		NULL
 #endif
@@ -738,6 +740,7 @@ static struct elf_backend_data elfNN_bed =
   elf_backend_ignore_undef_symbol,
   elf_backend_emit_relocs,
   elf_backend_count_relocs,
+  elf_backend_sort_relocs_p,
   elf_backend_grok_prstatus,
   elf_backend_grok_psinfo,
   elf_backend_write_core_note,

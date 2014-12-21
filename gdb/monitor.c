@@ -40,16 +40,15 @@
 #include "defs.h"
 #include "gdbcore.h"
 #include "target.h"
-#include "exceptions.h"
 #include <signal.h>
 #include <ctype.h>
-#include <string.h>
 #include <sys/types.h>
 #include "command.h"
 #include "serial.h"
 #include "monitor.h"
 #include "gdbcmd.h"
 #include "inferior.h"
+#include "infrun.h"
 #include "gdb_regex.h"
 #include "srec.h"
 #include "regcache.h"
@@ -61,7 +60,7 @@ static struct target_ops *targ_ops;
 
 static void monitor_interrupt_query (void);
 static void monitor_interrupt_twice (int);
-static void monitor_stop (ptid_t);
+static void monitor_stop (struct target_ops *self, ptid_t);
 static void monitor_dump_regs (struct regcache *regcache);
 
 #if 0
@@ -712,9 +711,9 @@ compile_pattern (char *pattern, struct re_pattern_buffer *compiled_pattern,
    for communication.  */
 
 void
-monitor_open (char *args, struct monitor_ops *mon_ops, int from_tty)
+monitor_open (const char *args, struct monitor_ops *mon_ops, int from_tty)
 {
-  char *name;
+  const char *name;
   char **p;
   struct inferior *inf;
 
@@ -783,7 +782,7 @@ monitor_open (char *args, struct monitor_ops *mon_ops, int from_tty)
 
   if (current_monitor->stop)
     {
-      monitor_stop (inferior_ptid);
+      monitor_stop (targ_ops, inferior_ptid);
       if ((current_monitor->flags & MO_NO_ECHO_ON_OPEN) == 0)
 	{
 	  monitor_debug ("EXP Open echo\n");
@@ -853,7 +852,7 @@ monitor_open (char *args, struct monitor_ops *mon_ops, int from_tty)
    control.  */
 
 void
-monitor_close (void)
+monitor_close (struct target_ops *self)
 {
   if (monitor_desc)
     serial_close (monitor_desc);
@@ -2079,7 +2078,7 @@ monitor_create_inferior (struct target_ops *ops, char *exec_file,
     error (_("Args are not supported by the monitor."));
 
   first_time = 1;
-  clear_proceed_status ();
+  clear_proceed_status (0);
   regcache_write_pc (get_current_regcache (),
 		     bfd_get_start_address (exec_bfd));
 }
@@ -2103,7 +2102,7 @@ static int
 monitor_insert_breakpoint (struct target_ops *ops, struct gdbarch *gdbarch,
 			   struct bp_target_info *bp_tgt)
 {
-  CORE_ADDR addr = bp_tgt->placed_address;
+  CORE_ADDR addr = bp_tgt->placed_address = bp_tgt->reqstd_address;
   int i;
   int bplen;
 
@@ -2199,7 +2198,7 @@ monitor_wait_srec_ack (void)
 /* monitor_load -- download a file.  */
 
 static void
-monitor_load (char *args, int from_tty)
+monitor_load (struct target_ops *self, const char *args, int from_tty)
 {
   CORE_ADDR load_offset = 0;
   char **argv;
@@ -2267,7 +2266,7 @@ monitor_load (char *args, int from_tty)
 }
 
 static void
-monitor_stop (ptid_t ptid)
+monitor_stop (struct target_ops *self, ptid_t ptid)
 {
   monitor_debug ("MON stop\n");
   if ((current_monitor->flags & MO_SEND_BREAK_ON_STOP) != 0)
@@ -2281,7 +2280,7 @@ monitor_stop (ptid_t ptid)
    ourseleves here cause of a nasty echo.  */
 
 static void
-monitor_rcmd (char *command,
+monitor_rcmd (struct target_ops *self, const char *command,
 	      struct ui_file *outbuf)
 {
   char *p;
