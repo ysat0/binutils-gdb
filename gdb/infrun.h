@@ -18,7 +18,6 @@
 #ifndef INFRUN_H
 #define INFRUN_H 1
 
-#include "ptid.h"
 #include "symtab.h"
 
 struct target_waitstatus;
@@ -83,7 +82,11 @@ extern struct regcache *stop_registers;
 
 extern void start_remote (int from_tty);
 
-extern void clear_proceed_status (void);
+/* Clear out all variables saying what to do when inferior is
+   continued or stepped.  First do this, then set the ones you want,
+   then call `proceed'.  STEP indicates whether we're preparing for a
+   step/stepi command.  */
+extern void clear_proceed_status (int step);
 
 extern void proceed (CORE_ADDR, enum gdb_signal, int);
 
@@ -91,6 +94,8 @@ extern void proceed (CORE_ADDR, enum gdb_signal, int);
    Normally, use `proceed', which handles a lot of bookkeeping.  */
 extern void resume (int, enum gdb_signal);
 
+/* Return a ptid representing the set of threads that we will proceed,
+   in the perspective of the user/frontend.  */
 extern ptid_t user_visible_resume_ptid (int step);
 
 extern void wait_for_inferior (void);
@@ -110,15 +115,39 @@ extern void insert_step_resume_breakpoint_at_sal (struct gdbarch *,
 						  struct symtab_and_line ,
 						  struct frame_id);
 
-extern void follow_inferior_reset_breakpoints (void);
-
 /* Returns true if we're trying to step past the instruction at
    ADDRESS in ASPACE.  */
 extern int stepping_past_instruction_at (struct address_space *aspace,
 					 CORE_ADDR address);
 
+/* Returns true if we're trying to step past an instruction that
+   triggers a non-steppable watchpoint.  */
+extern int stepping_past_nonsteppable_watchpoint (void);
+
 extern void set_step_info (struct frame_info *frame,
 			   struct symtab_and_line sal);
+
+/* Several print_*_reason helper functions to print why the inferior
+   has stopped to the passed in UIOUT.  */
+
+/* Signal received, print why the inferior has stopped.  */
+extern void print_signal_received_reason (struct ui_out *uiout,
+					  enum gdb_signal siggnal);
+
+/* Print why the inferior has stopped.  We are done with a
+   step/next/si/ni command, print why the inferior has stopped.  */
+extern void print_end_stepping_range_reason (struct ui_out *uiout);
+
+/* The inferior was terminated by a signal, print why it stopped.  */
+extern void print_signal_exited_reason (struct ui_out *uiout,
+					enum gdb_signal siggnal);
+
+/* The inferior program is finished, print why it stopped.  */
+extern void print_exited_reason (struct ui_out *uiout, int exitstatus);
+
+/* Reverse execution: target ran out of history info, print why the
+   inferior has stopped.  */
+extern void print_no_history_reason (struct ui_out *uiout);
 
 extern void print_stop_event (struct target_waitstatus *ws);
 

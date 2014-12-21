@@ -30,8 +30,6 @@
 
 #include "defs.h"
 #include <ctype.h>
-#include <string.h>
-
 #include "symtab.h"
 #include "gdbtypes.h"
 #include "value.h"
@@ -505,7 +503,7 @@ set_check (char *ignore, int from_tty)
 {
   printf_unfiltered (
      "\"set check\" must be followed by the name of a check subcommand.\n");
-  help_list (setchecklist, "set check ", -1, gdb_stdout);
+  help_list (setchecklist, "set check ", all_commands, gdb_stdout);
 }
 
 static void
@@ -829,6 +827,8 @@ const struct language_defn unknown_language_defn =
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,
   &default_varobj_ops,
+  NULL,
+  NULL,
   LANG_MAGIC
 };
 
@@ -874,6 +874,8 @@ const struct language_defn auto_language_defn =
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,
   &default_varobj_ops,
+  NULL,
+  NULL,
   LANG_MAGIC
 };
 
@@ -917,6 +919,8 @@ const struct language_defn local_language_defn =
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,
   &default_varobj_ops,
+  NULL,
+  NULL,
   LANG_MAGIC
 };
 
@@ -984,21 +988,38 @@ language_bool_type (const struct language_defn *la,
 }
 
 struct type *
-language_lookup_primitive_type_by_name (const struct language_defn *la,
-					struct gdbarch *gdbarch,
-					const char *name)
+language_lookup_primitive_type (const struct language_defn *la,
+				struct gdbarch *gdbarch,
+				const char *name)
 {
   struct language_gdbarch *ld = gdbarch_data (gdbarch,
 					      language_gdbarch_data);
   struct type *const *p;
+
+  if (symbol_lookup_debug)
+    {
+      fprintf_unfiltered (gdb_stdlog,
+			  "language_lookup_primitive_type (%s, %s, %s)",
+			  la->la_name, host_address_to_string (gdbarch), name);
+    }
 
   for (p = ld->arch_info[la->la_language].primitive_type_vector;
        (*p) != NULL;
        p++)
     {
       if (strcmp (TYPE_NAME (*p), name) == 0)
-	return (*p);
+	{
+	  if (symbol_lookup_debug)
+	    {
+	      fprintf_unfiltered (gdb_stdlog, " = %s\n",
+				  host_address_to_string (*p));
+	    }
+	  return (*p);
+	}
     }
+
+  if (symbol_lookup_debug)
+    fprintf_unfiltered (gdb_stdlog, " = NULL\n");
   return (NULL);
 }
 

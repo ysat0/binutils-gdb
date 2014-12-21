@@ -45,7 +45,6 @@
 #include "symtab.h"
 #include "gdbcore.h"
 #include "objfiles.h"
-#include "exceptions.h"
 #include "gdbcmd.h"
 #include "target.h"
 #include "value.h"
@@ -92,7 +91,6 @@ symbol_file_add_from_memory (struct bfd *templ, CORE_ADDR addr,
   struct section_addr_info *sai;
   unsigned int i;
   struct cleanup *cleanup;
-  struct target_section *sections, *sections_end, *tsec;
 
   if (bfd_get_flavour (templ) != bfd_target_elf_flavour)
     error (_("add-symbol-file-from-memory not supported for this target"));
@@ -132,22 +130,7 @@ symbol_file_add_from_memory (struct bfd *templ, CORE_ADDR addr,
 				   from_tty ? SYMFILE_VERBOSE : 0,
                                    sai, OBJF_SHARED, NULL);
 
-  sections = NULL;
-  sections_end = NULL;
-
-  if (build_section_table (nbfd, &sections, &sections_end) == 0)
-    {
-      make_cleanup (xfree, sections);
-
-      /* Adjust the target section addresses by the load address.  */
-      for (tsec = sections; tsec != sections_end; ++tsec)
-	{
-	  tsec->addr += loadbase;
-	  tsec->endaddr += loadbase;
-	}
-
-      add_target_sections (&nbfd, sections, sections_end);
-    }
+  add_target_sections_of_objfile (objf);
 
   /* This might change our ideas about frames already looked at.  */
   reinit_frame_cache ();
@@ -204,33 +187,15 @@ symbol_file_add_from_memory_wrapper (struct ui_out *uiout, void *data)
   return 0;
 }
 
-/* Rummage through mappings to find the vsyscall page size.  */
-
-static int
-find_vdso_size (CORE_ADDR vaddr, unsigned long size,
-		int read, int write, int exec, int modified,
-		void *data)
-{
-  struct symbol_file_add_from_memory_args *args = data;
-
-  if (vaddr == args->sysinfo_ehdr)
-    {
-      args->size = size;
-      return 1;
-    }
-  return 0;
-}
-
 /* Try to add the symbols for the vsyscall page, if there is one.
    This function is called via the inferior_created observer.  */
 
 static void
 add_vsyscall_page (struct target_ops *target, int from_tty)
 {
-  CORE_ADDR sysinfo_ehdr;
+  struct mem_range vsyscall_range;
 
-  if (target_auxv_search (target, AT_SYSINFO_EHDR, &sysinfo_ehdr) > 0
-      && sysinfo_ehdr != (CORE_ADDR) 0)
+  if (gdbarch_vsyscall_range (target_gdbarch (), &vsyscall_range))
     {
       struct bfd *bfd;
       struct symbol_file_add_from_memory_args args;
@@ -253,14 +218,11 @@ add_vsyscall_page (struct target_ops *target, int from_tty)
 	  return;
 	}
       args.bfd = bfd;
-      args.sysinfo_ehdr = sysinfo_ehdr;
-      args.size = 0;
-      if (gdbarch_find_memory_regions_p (target_gdbarch ()))
-	(void) gdbarch_find_memory_regions (target_gdbarch (),
-					    find_vdso_size, &args);
+      args.sysinfo_ehdr = vsyscall_range.start;
+      args.size = vsyscall_range.length;
 
       args.name = xstrprintf ("system-supplied DSO at %s",
-			      paddress (target_gdbarch (), sysinfo_ehdr));
+			      paddress (target_gdbarch (), vsyscall_range.start));
       /* Pass zero for FROM_TTY, because the action of loading the
 	 vsyscall DSO was not triggered by the user, even if the user
 	 typed "run" at the TTY.  */

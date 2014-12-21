@@ -28,6 +28,12 @@ if ![runto_main] {
     return -1
 }
 
+# If we can read the memory at address 0, skip the test.
+if { [is_address_zero_readable] } {
+    untested "Memory at address 0 is readable"
+    return
+}
+
 delete_breakpoints
 
 # Test whether the target supports hardware breakpoints at all.

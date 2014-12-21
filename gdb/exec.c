@@ -38,8 +38,6 @@
 
 #include <fcntl.h>
 #include "readline/readline.h"
-#include <string.h>
-
 #include "gdbcore.h"
 
 #include <ctype.h>
@@ -61,10 +59,7 @@ void _initialize_exec (void);
 
 /* The target vector for executable files.  */
 
-struct target_ops exec_ops;
-
-/* True if the exec target is pushed on the stack.  */
-static int using_exec_ops;
+static struct target_ops exec_ops;
 
 /* Whether to open exec and core files read-only or read-write.  */
 
@@ -79,7 +74,7 @@ show_write_files (struct ui_file *file, int from_tty,
 
 
 static void
-exec_open (char *args, int from_tty)
+exec_open (const char *args, int from_tty)
 {
   target_preopen (from_tty);
   exec_file_attach (args, from_tty);
@@ -115,27 +110,18 @@ exec_close (void)
 static void
 exec_close_1 (struct target_ops *self)
 {
-  using_exec_ops = 0;
+  struct program_space *ss;
+  struct cleanup *old_chain;
 
+  old_chain = save_current_program_space ();
+  ALL_PSPACES (ss)
   {
-    struct program_space *ss;
-    struct cleanup *old_chain;
-
-    old_chain = save_current_program_space ();
-    ALL_PSPACES (ss)
-    {
-      set_current_program_space (ss);
-
-      /* Delete all target sections.  */
-      resize_section_table
-	(current_target_sections,
-	 -resize_section_table (current_target_sections, 0));
-
-      exec_close ();
-    }
-
-    do_cleanups (old_chain);
+    set_current_program_space (ss);
+    clear_section_table (current_target_sections);
+    exec_close ();
   }
+
+  do_cleanups (old_chain);
 }
 
 void
@@ -166,7 +152,7 @@ exec_file_clear (int from_tty)
    we're supplying the exec pathname late for good reason.)  */
 
 void
-exec_file_attach (char *filename, int from_tty)
+exec_file_attach (const char *filename, int from_tty)
 {
   struct cleanup *cleanups;
 
@@ -366,15 +352,29 @@ add_to_section_table (bfd *abfd, struct bfd_section *asect,
   (*table_pp)++;
 }
 
-int
-resize_section_table (struct target_section_table *table, int num_added)
+/* See exec.h.  */
+
+void
+clear_section_table (struct target_section_table *table)
+{
+  xfree (table->sections);
+  table->sections = table->sections_end = NULL;
+}
+
+/* Resize section table TABLE by ADJUSTMENT.
+   ADJUSTMENT may be negative, in which case the caller must have already
+   removed the sections being deleted.
+   Returns the old size.  */
+
+static int
+resize_section_table (struct target_section_table *table, int adjustment)
 {
   int old_count;
   int new_count;
 
   old_count = table->sections_end - table->sections;
 
-  new_count = num_added + old_count;
+  new_count = adjustment + old_count;
 
   if (new_count)
     {
@@ -383,10 +383,7 @@ resize_section_table (struct target_section_table *table, int num_added)
       table->sections_end = table->sections + new_count;
     }
   else
-    {
-      xfree (table->sections);
-      table->sections = table->sections_end = NULL;
-    }
+    clear_section_table (table);
 
   return old_count;
 }
@@ -439,11 +436,8 @@ add_target_sections (void *owner,
 
       /* If these are the first file sections we can provide memory
 	 from, push the file_stratum target.  */
-      if (!using_exec_ops)
-	{
-	  using_exec_ops = 1;
-	  push_target (&exec_ops);
-	}
+      if (!target_is_pushed (&exec_ops))
+	push_target (&exec_ops);
     }
 }
 
@@ -945,7 +939,11 @@ exec_has_memory (struct target_ops *ops)
 	  != current_target_sections->sections_end);
 }
 
-static char *exec_make_note_section (struct target_ops *self, bfd *, int *);
+static char *
+exec_make_note_section (struct target_ops *self, bfd *obfd, int *note_size)
+{
+  error (_("Can't create a corefile"));
+}
 
 /* Fill in the exec file target vector.  Very few entries need to be
    defined.  */
@@ -1012,10 +1010,4 @@ Show writing into executable and core files."), NULL,
 			   &setlist, &showlist);
 
   add_target_with_completer (&exec_ops, filename_completer);
-}
-
-static char *
-exec_make_note_section (struct target_ops *self, bfd *obfd, int *note_size)
-{
-  error (_("Can't create a corefile"));
 }

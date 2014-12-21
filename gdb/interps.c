@@ -36,10 +36,7 @@
 #include "event-top.h"
 #include "interps.h"
 #include "completer.h"
-#include <string.h>
-#include "gdb_assert.h"
 #include "top.h"		/* For command_loop.  */
-#include "exceptions.h"
 #include "continuations.h"
 
 /* True if the current interpreter in is async mode.  See interps.h
@@ -70,9 +67,6 @@ struct interp
   int quiet_p;
 };
 
-/* Functions local to this file.  */
-static void initialize_interps (void);
-
 /* The magic initialization routine for this module.  */
 
 void _initialize_interpreter (void);
@@ -82,8 +76,6 @@ void _initialize_interpreter (void);
 static struct interp *interp_list = NULL;
 static struct interp *current_interpreter = NULL;
 static struct interp *top_level_interpreter_ptr = NULL;
-
-static int interpreter_initialized = 0;
 
 /* interp_new - This allocates space for a new interpreter,
    fills the fields from the inputs, and returns a pointer to the
@@ -112,9 +104,6 @@ interp_new (const char *name, const struct interp_procs *procs)
 void
 interp_add (struct interp *interp)
 {
-  if (!interpreter_initialized)
-    initialize_interps ();
-
   gdb_assert (interp_lookup (interp->name) == NULL);
 
   interp->next = interp_list;
@@ -204,19 +193,11 @@ interp_set (struct interp *interp, int top_level)
       return 0;
     }
 
-  /* Finally, put up the new prompt to show that we are indeed here. 
-     Also, display_gdb_prompt for the console does some readline magic
-     which is needed for the console interpreter, at least...  */
-
-  if (!first_time)
+  if (!first_time && !interp_quiet_p (interp))
     {
-      if (!interp_quiet_p (interp))
-	{
-	  xsnprintf (buffer, sizeof (buffer),
-		     "Switching to interpreter \"%.24s\".\n", interp->name);
-	  ui_out_text (current_uiout, buffer);
-	}
-      display_gdb_prompt (NULL);
+      xsnprintf (buffer, sizeof (buffer),
+		 "Switching to interpreter \"%.24s\".\n", interp->name);
+      ui_out_text (current_uiout, buffer);
     }
 
   return 1;
@@ -302,20 +283,6 @@ current_interp_named_p (const char *interp_name)
     return (strcmp (current_interpreter->name, interp_name) == 0);
 
   return 0;
-}
-
-/* This is called in display_gdb_prompt.  If the proc returns a zero
-   value, display_gdb_prompt will return without displaying the
-   prompt.  */
-int
-current_interp_display_prompt_p (void)
-{
-  if (current_interpreter == NULL
-      || current_interpreter->procs->prompt_proc_p == NULL)
-    return 0;
-  else
-    return current_interpreter->procs->prompt_proc_p (current_interpreter->
-						      data);
 }
 
 /* The interpreter that is active while `interp_exec' is active, NULL
@@ -409,17 +376,6 @@ clear_interpreter_hooks (void)
   deprecated_target_wait_hook = 0;
   deprecated_call_command_hook = 0;
   deprecated_error_begin_hook = 0;
-}
-
-/* This is a lazy init routine, called the first time the interpreter
-   module is used.  I put it here just in case, but I haven't thought
-   of a use for it yet.  I will probably bag it soon, since I don't
-   think it will be necessary.  */
-static void
-initialize_interps (void)
-{
-  interpreter_initialized = 1;
-  /* Don't know if anything needs to be done here...  */
 }
 
 static void

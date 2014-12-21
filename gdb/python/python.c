@@ -27,7 +27,6 @@
 #include "objfiles.h"
 #include "value.h"
 #include "language.h"
-#include "exceptions.h"
 #include "event-loop.h"
 #include "serial.h"
 #include "readline/tilde.h"
@@ -86,7 +85,6 @@ const struct extension_language_defn extension_language_python =
 
 #ifdef HAVE_PYTHON
 
-#include "libiberty.h"
 #include "cli/cli-decode.h"
 #include "charset.h"
 #include "top.h"
@@ -186,7 +184,13 @@ static const struct extension_language_ops python_extension_ops =
   gdbpy_set_quit_flag,
   gdbpy_check_quit_flag,
 
-  gdbpy_before_prompt_hook
+  gdbpy_before_prompt_hook,
+
+  gdbpy_clone_xmethod_worker_data,
+  gdbpy_free_xmethod_worker_data,
+  gdbpy_get_matching_xmethod_workers,
+  gdbpy_get_xmethod_arg_types,
+  gdbpy_invoke_xmethod
 };
 
 /* Architecture and language to be used in callbacks from
@@ -1749,10 +1753,16 @@ message == an error message without a stack will be printed."),
       || gdbpy_initialize_signal_event () < 0
       || gdbpy_initialize_breakpoint_event () < 0
       || gdbpy_initialize_continue_event () < 0
+      || gdbpy_initialize_inferior_call_pre_event () < 0
+      || gdbpy_initialize_inferior_call_post_event () < 0
+      || gdbpy_initialize_register_changed_event () < 0
+      || gdbpy_initialize_memory_changed_event () < 0
       || gdbpy_initialize_exited_event () < 0
       || gdbpy_initialize_thread_event () < 0
       || gdbpy_initialize_new_objfile_event ()  < 0
-      || gdbpy_initialize_arch () < 0)
+      || gdbpy_initialize_clear_objfiles_event ()  < 0
+      || gdbpy_initialize_arch () < 0
+      || gdbpy_initialize_xmethods () < 0)
     goto fail;
 
   gdbpy_to_string_cst = PyString_FromString ("to_string");
@@ -1946,6 +1956,14 @@ a boolean indicating if name is a field of the current implied argument\n\
     METH_VARARGS | METH_KEYWORDS,
     "lookup_global_symbol (name [, domain]) -> symbol\n\
 Return the symbol corresponding to the given name (or None)." },
+
+  { "lookup_objfile", (PyCFunction) gdbpy_lookup_objfile,
+    METH_VARARGS | METH_KEYWORDS,
+    "lookup_objfile (name, [by_build_id]) -> objfile\n\
+Look up the specified objfile.\n\
+If by_build_id is True, the objfile is looked up by using name\n\
+as its build id." },
+
   { "block_for_pc", gdbpy_block_for_pc, METH_VARARGS,
     "Return the block containing the given pc value, or None." },
   { "solib_name", gdbpy_solib_name, METH_VARARGS,

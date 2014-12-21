@@ -144,6 +144,9 @@ optional arguments while skipping others.  Example:
 * Frame Filter API::            Filtering Frames.
 * Frame Decorator API::         Decorating Frames.
 * Writing a Frame Filter::      Writing a Frame Filter.
+* Xmethods In Python::          Adding and replacing methods of C++ classes.
+* Xmethod API::                 Xmethod types.
+* Writing an Xmethod::          Writing an xmethod.
 * Inferiors In Python::         Python representation of inferiors (processes)
 * Events In Python::            Listening for events from @value{GDBN}.
 * Threads In Python::           Accessing inferior threads from Python.
@@ -215,7 +218,7 @@ Evaluate @var{command}, a string, as a @value{GDBN} CLI command.
 If a GDB exception happens while @var{command} runs, it is
 translated as described in @ref{Exception Handling,,Exception Handling}.
 
-@var{from_tty} specifies whether @value{GDBN} ought to consider this
+The @var{from_tty} flag specifies whether @value{GDBN} ought to consider this
 command as having originated from the user invoking it interactively.
 It must be a boolean value.  If omitted, it defaults to @code{False}.
 
@@ -237,10 +240,10 @@ Return a sequence holding all of @value{GDBN}'s breakpoints.
 
 @findex gdb.parameter
 @defun gdb.parameter (parameter)
-Return the value of a @value{GDBN} parameter.  @var{parameter} is a
-string naming the parameter to look up; @var{parameter} may contain
-spaces if the parameter has a multi-part name.  For example,
-@samp{print object} is a valid parameter name.
+Return the value of a @value{GDBN} @var{parameter} given by its name,
+a string; the parameter name string may contain spaces if the parameter has a
+multi-part name.  For example, @samp{print object} is a valid
+parameter name.
 
 If the named parameter does not exist, this function throws a
 @code{gdb.error} (@pxref{Exception Handling}).  Otherwise, the
@@ -251,7 +254,7 @@ type, and returned.
 @findex gdb.history
 @defun gdb.history (number)
 Return a value from @value{GDBN}'s value history (@pxref{Value
-History}).  @var{number} indicates which history element to return.
+History}).  The @var{number} argument indicates which history element to return.
 If @var{number} is negative, then @value{GDBN} will take its absolute value
 and count backward from the last element (i.e., the most recent element) to
 find the value to return.  If @var{number} is zero, then @value{GDBN} will
@@ -265,9 +268,9 @@ If no exception is raised, the return value is always an instance of
 
 @findex gdb.parse_and_eval
 @defun gdb.parse_and_eval (expression)
-Parse @var{expression} as an expression in the current language,
-evaluate it, and return the result as a @code{gdb.Value}.
-@var{expression} must be a string.
+Parse @var{expression}, which must be a string, as an expression in
+the current language, evaluate it, and return the result as a
+@code{gdb.Value}.
 
 This function can be useful when implementing a new command
 (@pxref{Commands In Python}), as it provides a way to parse the
@@ -871,8 +874,7 @@ module:
 
 @findex gdb.lookup_type
 @defun gdb.lookup_type (name @r{[}, block@r{]})
-This function looks up a type by name.  @var{name} is the name of the
-type to look up.  It must be a string.
+This function looks up a type by its @var{name}, which must be a string.
 
 If @var{block} is given, then @var{name} is looked up in that scope.
 Otherwise, it is searched for globally.
@@ -1046,11 +1048,12 @@ exception.
 
 @defun Type.template_argument (n @r{[}, block@r{]})
 If this @code{gdb.Type} is an instantiation of a template, this will
-return a new @code{gdb.Type} which represents the type of the
-@var{n}th template argument.
+return a new @code{gdb.Value} or @code{gdb.Type} which represents the
+value of the @var{n}th template argument (indexed starting at 0).
 
-If this @code{gdb.Type} is not a template type, this will throw an
-exception.  Ordinarily, only C@t{++} code will have template types.
+If this @code{gdb.Type} is not a template type, or if the type has fewer
+than @var{n} template arguments, this will throw an exception.
+Ordinarily, only C@t{++} code will have template types.
 
 If @var{block} is given, then @var{name} is looked up in that scope.
 Otherwise, it is searched for globally.
@@ -1533,8 +1536,8 @@ The recognition function is defined as:
 @defmethod type_recognizer recognize (self, type)
 If @var{type} is not recognized, return @code{None}.  Otherwise,
 return a string which is to be printed as the name of @var{type}.
-@var{type} will be an instance of @code{gdb.Type} (@pxref{Types In
-Python}).
+The @var{type} argument will be an instance of @code{gdb.Type}
+(@pxref{Types In Python}).
 @end defmethod
 
 @value{GDBN} uses this two-pass approach so that type printers can
@@ -2175,6 +2178,348 @@ printed hierarchically.  Another approach would be to combine the
 marker in the inlined frame, and also show the hierarchical
 relationship.
 
+@node Xmethods In Python
+@subsubsection Xmethods In Python
+@cindex xmethods in Python
+
+@dfn{Xmethods} are additional methods or replacements for existing
+methods of a C@t{++} class.  This feature is useful for those cases
+where a method defined in C@t{++} source code could be inlined or
+optimized out by the compiler, making it unavailable to @value{GDBN}.
+For such cases, one can define an xmethod to serve as a replacement
+for the method defined in the C@t{++} source code.  @value{GDBN} will
+then invoke the xmethod, instead of the C@t{++} method, to
+evaluate expressions.  One can also use xmethods when debugging
+with core files.  Moreover, when debugging live programs, invoking an
+xmethod need not involve running the inferior (which can potentially
+perturb its state).  Hence, even if the C@t{++} method is available, it
+is better to use its replacement xmethod if one is defined.
+
+The xmethods feature in Python is available via the concepts of an
+@dfn{xmethod matcher} and an @dfn{xmethod worker}.  To
+implement an xmethod, one has to implement a matcher and a
+corresponding worker for it (more than one worker can be
+implemented, each catering to a different overloaded instance of the
+method).  Internally, @value{GDBN} invokes the @code{match} method of a
+matcher to match the class type and method name.  On a match, the
+@code{match} method returns a list of matching @emph{worker} objects.
+Each worker object typically corresponds to an overloaded instance of
+the xmethod.  They implement a @code{get_arg_types} method which
+returns a sequence of types corresponding to the arguments the xmethod
+requires.  @value{GDBN} uses this sequence of types to perform
+overload resolution and picks a winning xmethod worker.  A winner
+is also selected from among the methods @value{GDBN} finds in the
+C@t{++} source code.  Next, the winning xmethod worker and the
+winning C@t{++} method are compared to select an overall winner.  In
+case of a tie between a xmethod worker and a C@t{++} method, the
+xmethod worker is selected as the winner.  That is, if a winning
+xmethod worker is found to be equivalent to the winning C@t{++}
+method, then the xmethod worker is treated as a replacement for
+the C@t{++} method.  @value{GDBN} uses the overall winner to invoke the
+method.  If the winning xmethod worker is the overall winner, then
+the corresponding xmethod is invoked via the @code{invoke} method
+of the worker object.
+
+If one wants to implement an xmethod as a replacement for an
+existing C@t{++} method, then they have to implement an equivalent
+xmethod which has exactly the same name and takes arguments of
+exactly the same type as the C@t{++} method.  If the user wants to
+invoke the C@t{++} method even though a replacement xmethod is
+available for that method, then they can disable the xmethod.
+
+@xref{Xmethod API}, for API to implement xmethods in Python.
+@xref{Writing an Xmethod}, for implementing xmethods in Python.
+
+@node Xmethod API
+@subsubsection Xmethod API
+@cindex xmethod API
+
+The @value{GDBN} Python API provides classes, interfaces and functions
+to implement, register and manipulate xmethods.
+@xref{Xmethods In Python}.
+
+An xmethod matcher should be an instance of a class derived from
+@code{XMethodMatcher} defined in the module @code{gdb.xmethod}, or an
+object with similar interface and attributes.  An instance of
+@code{XMethodMatcher} has the following attributes:
+
+@defvar name
+The name of the matcher.
+@end defvar
+
+@defvar enabled
+A boolean value indicating whether the matcher is enabled or disabled.
+@end defvar
+
+@defvar methods
+A list of named methods managed by the matcher.  Each object in the list
+is an instance of the class @code{XMethod} defined in the module
+@code{gdb.xmethod}, or any object with the following attributes:
+
+@table @code
+
+@item name
+Name of the xmethod which should be unique for each xmethod
+managed by the matcher.
+
+@item enabled
+A boolean value indicating whether the xmethod is enabled or
+disabled.
+
+@end table
+
+The class @code{XMethod} is a convenience class with same
+attributes as above along with the following constructor:
+
+@defun XMethod.__init__ (self, name)
+Constructs an enabled xmethod with name @var{name}.
+@end defun
+@end defvar
+
+@noindent
+The @code{XMethodMatcher} class has the following methods:
+
+@defun XMethodMatcher.__init__ (self, name)
+Constructs an enabled xmethod matcher with name @var{name}.  The
+@code{methods} attribute is initialized to @code{None}.
+@end defun
+
+@defun XMethodMatcher.match (self, class_type, method_name)
+Derived classes should override this method.  It should return a
+xmethod worker object (or a sequence of xmethod worker
+objects) matching the @var{class_type} and @var{method_name}.
+@var{class_type} is a @code{gdb.Type} object, and @var{method_name}
+is a string value.  If the matcher manages named methods as listed in
+its @code{methods} attribute, then only those worker objects whose
+corresponding entries in the @code{methods} list are enabled should be
+returned.
+@end defun
+
+An xmethod worker should be an instance of a class derived from
+@code{XMethodWorker} defined in the module @code{gdb.xmethod},
+or support the following interface:
+
+@defun XMethodWorker.get_arg_types (self)
+This method returns a sequence of @code{gdb.Type} objects corresponding
+to the arguments that the xmethod takes.  It can return an empty
+sequence or @code{None} if the xmethod does not take any arguments.
+If the xmethod takes a single argument, then a single
+@code{gdb.Type} object corresponding to it can be returned.
+@end defun
+
+@defun XMethodWorker.__call__ (self, *args)
+This is the method which does the @emph{work} of the xmethod.  The
+@var{args} arguments is the tuple of arguments to the xmethod.  Each
+element in this tuple is a gdb.Value object.  The first element is
+always the @code{this} pointer value.
+@end defun
+
+For @value{GDBN} to lookup xmethods, the xmethod matchers
+should be registered using the following function defined in the module
+@code{gdb.xmethod}:
+
+@defun register_xmethod_matcher (locus, matcher, replace=False)
+The @code{matcher} is registered with @code{locus}, replacing an
+existing matcher with the same name as @code{matcher} if
+@code{replace} is @code{True}.  @code{locus} can be a
+@code{gdb.Objfile} object (@pxref{Objfiles In Python}), or a
+@code{gdb.Progspace} object (@pxref{Progspaces In Python}), or
+@code{None}.  If it is @code{None}, then @code{matcher} is registered
+globally.
+@end defun
+
+@node Writing an Xmethod
+@subsubsection Writing an Xmethod
+@cindex writing xmethods in Python
+
+Implementing xmethods in Python will require implementing xmethod
+matchers and xmethod workers (@pxref{Xmethods In Python}).  Consider
+the following C@t{++} class:
+
+@smallexample
+class MyClass
+@{
+public:
+  MyClass (int a) : a_(a) @{ @}
+
+  int geta (void) @{ return a_; @}
+  int operator+ (int b);
+
+private:
+  int a_;
+@};
+
+int
+MyClass::operator+ (int b)
+@{
+  return a_ + b;
+@}
+@end smallexample
+
+@noindent
+Let us define two xmethods for the class @code{MyClass}, one
+replacing the method @code{geta}, and another adding an overloaded
+flavor of @code{operator+} which takes a @code{MyClass} argument (the
+C@t{++} code above already has an overloaded @code{operator+}
+which takes an @code{int} argument).  The xmethod matcher can be
+defined as follows:
+
+@smallexample
+class MyClass_geta(gdb.xmethod.XMethod):
+    def __init__(self):
+        gdb.xmethod.XMethod.__init__(self, 'geta')
+ 
+    def get_worker(self, method_name):
+        if method_name == 'geta':
+            return MyClassWorker_geta()
+ 
+ 
+class MyClass_sum(gdb.xmethod.XMethod):
+    def __init__(self):
+        gdb.xmethod.XMethod.__init__(self, 'sum')
+ 
+    def get_worker(self, method_name):
+        if method_name == 'operator+':
+            return MyClassWorker_plus()
+ 
+ 
+class MyClassMatcher(gdb.xmethod.XMethodMatcher):
+    def __init__(self):
+        gdb.xmethod.XMethodMatcher.__init__(self, 'MyClassMatcher')
+        # List of methods 'managed' by this matcher
+        self.methods = [MyClass_geta(), MyClass_sum()]
+ 
+    def match(self, class_type, method_name):
+        if class_type.tag != 'MyClass':
+            return None
+        workers = []
+        for method in self.methods:
+            if method.enabled:
+                worker = method.get_worker(method_name)
+                if worker:
+                    workers.append(worker)
+ 
+        return workers
+@end smallexample
+
+@noindent
+Notice that the @code{match} method of @code{MyClassMatcher} returns
+a worker object of type @code{MyClassWorker_geta} for the @code{geta}
+method, and a worker object of type @code{MyClassWorker_plus} for the
+@code{operator+} method.  This is done indirectly via helper classes
+derived from @code{gdb.xmethod.XMethod}.  One does not need to use the
+@code{methods} attribute in a matcher as it is optional.  However, if a
+matcher manages more than one xmethod, it is a good practice to list the
+xmethods in the @code{methods} attribute of the matcher.  This will then
+facilitate enabling and disabling individual xmethods via the
+@code{enable/disable} commands.  Notice also that a worker object is
+returned only if the corresponding entry in the @code{methods} attribute
+of the matcher is enabled.
+
+The implementation of the worker classes returned by the matcher setup
+above is as follows:
+
+@smallexample
+class MyClassWorker_geta(gdb.xmethod.XMethodWorker):
+    def get_arg_types(self):
+        return None
+ 
+    def __call__(self, obj):
+        return obj['a_']
+ 
+ 
+class MyClassWorker_plus(gdb.xmethod.XMethodWorker):
+    def get_arg_types(self):
+        return gdb.lookup_type('MyClass')
+ 
+    def __call__(self, obj, other):
+        return obj['a_'] + other['a_']
+@end smallexample
+
+For @value{GDBN} to actually lookup a xmethod, it has to be
+registered with it.  The matcher defined above is registered with
+@value{GDBN} globally as follows:
+
+@smallexample
+gdb.xmethod.register_xmethod_matcher(None, MyClassMatcher())
+@end smallexample
+
+If an object @code{obj} of type @code{MyClass} is initialized in C@t{++}
+code as follows:
+
+@smallexample
+MyClass obj(5);
+@end smallexample
+
+@noindent
+then, after loading the Python script defining the xmethod matchers
+and workers into @code{GDBN}, invoking the method @code{geta} or using
+the operator @code{+} on @code{obj} will invoke the xmethods
+defined above:
+
+@smallexample
+(gdb) p obj.geta()
+$1 = 5
+
+(gdb) p obj + obj
+$2 = 10
+@end smallexample
+
+Consider another example with a C++ template class:
+
+@smallexample
+template <class T>
+class MyTemplate
+@{
+public:
+  MyTemplate () : dsize_(10), data_ (new T [10]) @{ @}
+  ~MyTemplate () @{ delete [] data_; @}
+ 
+  int footprint (void)
+  @{
+    return sizeof (T) * dsize_ + sizeof (MyTemplate<T>);
+  @}
+ 
+private:
+  int dsize_;
+  T *data_;
+@};
+@end smallexample
+
+Let us implement an xmethod for the above class which serves as a
+replacement for the @code{footprint} method.  The full code listing
+of the xmethod workers and xmethod matchers is as follows:
+
+@smallexample
+class MyTemplateWorker_footprint(gdb.xmethod.XMethodWorker):
+    def __init__(self, class_type):
+        self.class_type = class_type
+ 
+    def get_arg_types(self):
+        return None
+ 
+    def __call__(self, obj):
+        return (self.class_type.sizeof +
+                obj['dsize_'] *
+                self.class_type.template_argument(0).sizeof)
+ 
+ 
+class MyTemplateMatcher_footprint(gdb.xmethod.XMethodMatcher):
+    def __init__(self):
+        gdb.xmethod.XMethodMatcher.__init__(self, 'MyTemplateMatcher')
+ 
+    def match(self, class_type, method_name):
+        if (re.match('MyTemplate<[ \t\n]*[_a-zA-Z][ _a-zA-Z0-9]*>',
+                     class_type.tag) and
+            method_name == 'footprint'):
+            return MyTemplateWorker_footprint(class_type)
+@end smallexample
+
+Notice that, in this example, we have not used the @code{methods}
+attribute of the matcher as the matcher manages only one xmethod.  The
+user can enable/disable this xmethod by enabling/disabling the matcher
+itself.
+
 @node Inferiors In Python
 @subsubsection Inferiors In Python
 @cindex inferiors in Python
@@ -2383,6 +2728,65 @@ A reference to the object file (@code{gdb.Objfile}) which has been loaded.
 @xref{Objfiles In Python}, for details of the @code{gdb.Objfile} object.
 @end defvar
 
+@item events.clear_objfiles
+Emits @code{gdb.ClearObjFilesEvent} which indicates that the list of object
+files for a program space has been reset.
+@code{gdb.ClearObjFilesEvent} has one attribute:
+
+@defvar ClearObjFilesEvent.progspace
+A reference to the program space (@code{gdb.Progspace}) whose objfile list has
+been cleared.  @xref{Progspaces In Python}.
+@end defvar
+
+@item events.inferior_call_pre
+Emits @code{gdb.InferiorCallPreEvent} which indicates that a function in
+the inferior is about to be called.
+
+@defvar InferiorCallPreEvent.ptid
+The thread in which the call will be run.
+@end defvar
+
+@defvar InferiorCallPreEvent.address
+The location of the function to be called.
+@end defvar
+
+@item events.inferior_call_post
+Emits @code{gdb.InferiorCallPostEvent} which indicates that a function in
+the inferior has returned.
+
+@defvar InferiorCallPostEvent.ptid
+The thread in which the call was run.
+@end defvar
+
+@defvar InferiorCallPostEvent.address
+The location of the function that was called.
+@end defvar
+
+@item events.memory_changed
+Emits @code{gdb.MemoryChangedEvent} which indicates that the memory of the
+inferior has been modified by the @value{GDBN} user, for instance via a
+command like @w{@code{set *addr = value}}.  The event has the following
+attributes:
+
+@defvar MemoryChangedEvent.address
+The start address of the changed region.
+@end defvar
+
+@defvar MemoryChangedEvent.length
+Length in bytes of the changed region.
+@end defvar
+
+@item events.register_changed
+Emits @code{gdb.RegisterChangedEvent} which indicates that a register in the
+inferior has been modified by the @value{GDBN} user.
+
+@defvar RegisterChangedEvent.frame
+A gdb.Frame object representing the frame in which the register was modified.
+@end defvar
+@defvar RegisterChangedEvent.regnum
+Denotes which register was modified.
+@end defvar
+
 @end table
 
 @node Threads In Python
@@ -2540,8 +2944,8 @@ this method, that is, the @key{TAB} and @key{M-?} key bindings
 (@pxref{Completion}), and the @code{complete} command (@pxref{Help,
 complete}).
 
-The arguments @var{text} and @var{word} are both strings.  @var{text}
-holds the complete command line up to the cursor's location.
+The arguments @var{text} and @var{word} are both strings; @var{text}
+holds the complete command line up to the cursor's location, while
 @var{word} holds the last word of the command line; this is computed
 using a word-breaking heuristic.
 
@@ -3011,6 +3415,50 @@ The @code{frame_filters} attribute is a dictionary of frame filter
 objects.  @xref{Frame Filter API}, for more information.
 @end defvar
 
+One may add arbitrary attributes to @code{gdb.Progspace} objects
+in the usual Python way.
+This is useful if, for example, one needs to do some extra record keeping
+associated with the program space.
+
+In this contrived example, we want to perform some processing when
+an objfile with a certain symbol is loaded, but we only want to do
+this once because it is expensive.  To achieve this we record the results
+with the program space because we can't predict when the desired objfile
+will be loaded.
+
+@smallexample
+(gdb) python
+def clear_objfiles_handler(event):
+    event.progspace.expensive_computation = None
+def expensive(symbol):
+    """A mock routine to perform an "expensive" computation on symbol."""
+    print "Computing the answer to the ultimate question ..."
+    return 42
+def new_objfile_handler(event):
+    objfile = event.new_objfile
+    progspace = objfile.progspace
+    if not hasattr(progspace, 'expensive_computation') or \
+            progspace.expensive_computation is None:
+        # We use 'main' for the symbol to keep the example simple.
+        # Note: There's no current way to constrain the lookup
+        # to one objfile.
+        symbol = gdb.lookup_global_symbol('main')
+        if symbol is not None:
+            progspace.expensive_computation = expensive(symbol)
+gdb.events.clear_objfiles.connect(clear_objfiles_handler)
+gdb.events.new_objfile.connect(new_objfile_handler)
+end
+(gdb) file /tmp/hello
+Reading symbols from /tmp/hello...done.
+Computing the answer to the ultimate question ...
+(gdb) python print gdb.current_progspace().expensive_computation
+42
+(gdb) run
+Starting program: /tmp/hello
+Hello.
+[Inferior 1 (process 4242) exited normally]
+@end smallexample
+
 @node Objfiles In Python
 @subsubsection Objfiles In Python
 
@@ -3040,11 +3488,56 @@ Return a sequence of all the objfiles current known to @value{GDBN}.
 @xref{Objfiles In Python}.
 @end defun
 
+@findex gdb.lookup_objfile
+@defun gdb.lookup_objfile (name @r{[}, by_build_id{]})
+Look up @var{name}, a file name or build ID, in the list of objfiles
+for the current program space (@pxref{Progspaces In Python}).
+If the objfile is not found throw the Python @code{ValueError} exception.
+
+If @var{name} is a relative file name, then it will match any
+source file name with the same trailing components.  For example, if
+@var{name} is @samp{gcc/expr.c}, then it will match source file
+name of @file{/build/trunk/gcc/expr.c}, but not
+@file{/build/trunk/libcpp/expr.c} or @file{/build/trunk/gcc/x-expr.c}.
+
+If @var{by_build_id} is provided and is @code{True} then @var{name}
+is the build ID of the objfile.  Otherwise, @var{name} is a file name.
+This is supported only on some operating systems, notably those which use
+the ELF format for binary files and the @sc{gnu} Binutils.  For more details
+about this feature, see the description of the @option{--build-id}
+command-line option in @ref{Options, , Command Line Options, ld.info,
+The GNU Linker}.
+@end defun
+
 Each objfile is represented by an instance of the @code{gdb.Objfile}
 class.
 
 @defvar Objfile.filename
 The file name of the objfile as a string.
+@end defvar
+
+@defvar Objfile.owner
+For separate debug info objfiles this is the corresponding @code{gdb.Objfile}
+object that debug info is being provided for.
+Otherwise this is @code{None}.
+Separate debug info objfiles are added with the
+@code{gdb.Objfile.add_separate_debug_file} method, described below.
+@end defvar
+
+@defvar Objfile.build_id
+The build ID of the objfile as a string.
+If the objfile does not have a build ID then the value is @code{None}.
+
+This is supported only on some operating systems, notably those which use
+the ELF format for binary files and the @sc{gnu} Binutils.  For more details
+about this feature, see the description of the @option{--build-id}
+command-line option in @ref{Options, , Command Line Options, ld.info,
+The GNU Linker}.
+@end defvar
+
+@defvar Objfile.progspace
+The containing program space of the objfile as a @code{gdb.Progspace}
+object.  @xref{Progspaces In Python}.
 @end defvar
 
 @defvar Objfile.pretty_printers
@@ -3066,6 +3559,28 @@ The @code{frame_filters} attribute is a dictionary of frame filter
 objects.  @xref{Frame Filter API}, for more information.
 @end defvar
 
+One may add arbitrary attributes to @code{gdb.Objfile} objects
+in the usual Python way.
+This is useful if, for example, one needs to do some extra record keeping
+associated with the objfile.
+
+In this contrived example we record the time when @value{GDBN}
+loaded the objfile.
+
+@smallexample
+(gdb) python
+import datetime
+def new_objfile_handler(event):
+    # Set the time_loaded attribute of the new objfile.
+    event.new_objfile.time_loaded = datetime.datetime.today()
+gdb.events.new_objfile.connect(new_objfile_handler)
+end
+(gdb) file ./hello
+Reading symbols from ./hello...done.
+(gdb) python print gdb.objfiles()[0].time_loaded
+2014-10-09 11:41:36.770345
+@end smallexample
+
 A @code{gdb.Objfile} object has the following methods:
 
 @defun Objfile.is_valid ()
@@ -3074,6 +3589,17 @@ Returns @code{True} if the @code{gdb.Objfile} object is valid,
 if the object file it refers to is not loaded in @value{GDBN} any
 longer.  All other @code{gdb.Objfile} methods will throw an exception
 if it is invalid at the time the method is called.
+@end defun
+
+@defun Objfile.add_separate_debug_file (file)
+Add @var{file} to the list of files that @value{GDBN} will search for
+debug information for the objfile.
+This is useful when the debug info has been removed from the program
+and stored in a separate file.  @value{GDBN} has built-in support for
+finding separate debug info files (@pxref{Separate Debug Files}), but if
+the file doesn't live in one of the standard places that @value{GDBN}
+searches then this function can be used to add a debug info file
+from a different place.
 @end defun
 
 @node Frames In Python
@@ -3200,6 +3726,9 @@ stack corruption.
 The frame unwinder did not find any saved PC, but we needed
 one to unwind further.
 
+@item gdb.FRAME_UNWIND_MEMORY_ERROR
+The frame unwinder caused an error while trying to access memory.
+
 @item gdb.FRAME_UNWIND_FIRST_ERROR
 Any stop reason greater or equal to this value indicates some kind
 of error.  This special value facilitates writing code that tests
@@ -3242,12 +3771,19 @@ Return the frame's symtab and line object.
 @xref{Symbol Tables In Python}.
 @end defun
 
+@defun Frame.read_register (register)
+Return the value of @var{register} in this frame.  The @var{register}
+argument must be a string (e.g., @code{'sp'} or @code{'rax'}).
+Returns a @code{Gdb.Value} object.  Throws an exception if @var{register}
+does not exist.
+@end defun
+
 @defun Frame.read_var (variable @r{[}, block@r{]})
 Return the value of @var{variable} in this frame.  If the optional
 argument @var{block} is provided, search for the variable from that
 block; otherwise start at the frame's current block (which is
-determined by the frame's current program counter).  @var{variable}
-must be a string or a @code{gdb.Symbol} object.  @var{block} must be a
+determined by the frame's current program counter).  The @var{variable}
+argument must be a string or a @code{gdb.Symbol} object; @var{block} must be a
 @code{gdb.Block} object.
 @end defun
 
@@ -3688,6 +4224,14 @@ The symbol table's backing object file.  @xref{Objfiles In Python}.
 This attribute is not writable.
 @end defvar
 
+@defvar Symtab.producer
+The name and possibly version number of the program that
+compiled the code in the symbol table.
+The contents of this string is up to the compiler.
+If no producer information is available then @code{None} is returned.
+This attribute is not writable.
+@end defvar
+
 A @code{gdb.Symtab} object has the following methods:
 
 @defun Symtab.is_valid ()
@@ -3777,8 +4321,8 @@ has the following direct access methods:
 
 @defun LineTable.line (line)
 Return a Python @code{Tuple} of @code{LineTableEntry} objects for any
-entries in the line table for the given @var{line}.  @var{line} refers
-to the source code line.  If there are no entries for that source code
+entries in the line table for the given @var{line}, which specifies
+the source code line.  If there are no entries for that source code
 @var{line}, the Python @code{None} is returned.
 @end defun
 
@@ -3805,13 +4349,13 @@ Python code can manipulate breakpoints via the @code{gdb.Breakpoint}
 class.
 
 @defun Breakpoint.__init__ (spec @r{[}, type @r{[}, wp_class @r{[},internal @r{[},temporary@r{]]]]})
-Create a new breakpoint.  @var{spec} is a string naming the location
-of the breakpoint, or an expression that defines a watchpoint.  The
-contents can be any location recognized by the @code{break} command,
-or in the case of a watchpoint, by the @code{watch} command.  The
-optional @var{type} denotes the breakpoint to create from the types
-defined later in this chapter.  This argument can be either:
-@code{gdb.BP_BREAKPOINT} or @code{gdb.BP_WATCHPOINT}.  @var{type}
+Create a new breakpoint according to @var{spec}, which is a string
+naming the location of the breakpoint, or an expression that defines a
+watchpoint.  The contents can be any location recognized by the
+@code{break} command, or in the case of a watchpoint, by the
+@code{watch} command.  The optional @var{type} denotes the breakpoint
+to create from the types defined later in this chapter.  This argument
+can be either @code{gdb.BP_BREAKPOINT} or @code{gdb.BP_WATCHPOINT}; it
 defaults to @code{gdb.BP_BREAKPOINT}.  The optional @var{internal}
 argument allows the breakpoint to become invisible to the user.  The
 breakpoint will neither be reported when created, nor will it be
@@ -3887,7 +4431,7 @@ watchpoint scope, the watchpoint remains valid even if execution of the
 inferior leaves the scope of that watchpoint.
 @end defun
 
-@defun Breakpoint.delete
+@defun Breakpoint.delete ()
 Permanently deletes the @value{GDBN} breakpoint.  This also
 invalidates the Python @code{Breakpoint} object.  Any further access
 to this object's attributes or methods will raise an error.
@@ -3895,7 +4439,8 @@ to this object's attributes or methods will raise an error.
 
 @defvar Breakpoint.enabled
 This attribute is @code{True} if the breakpoint is enabled, and
-@code{False} otherwise.  This attribute is writable.
+@code{False} otherwise.  This attribute is writable.  You can use it to enable
+or disable the breakpoint.
 @end defvar
 
 @defvar Breakpoint.silent
@@ -4261,8 +4806,8 @@ regular expressions.
 A pretty-printer which handles printing of @code{enum} values.  Unlike
 @value{GDBN}'s built-in @code{enum} printing, this printer attempts to
 work properly when there is some overlap between the enumeration
-constants.  @var{name} is the name of the printer and also the name of
-the @code{enum} type to look up.
+constants.  The argument @var{name} is the name of the printer and
+also the name of the @code{enum} type to look up.
 
 @item register_pretty_printer (@var{obj}, @var{printer}, @var{replace}=False)
 Register @var{printer} with the pretty-printer list of @var{obj}.
@@ -4350,13 +4895,12 @@ string.  Otherwise, return @code{None}.  This is called by
 API}).
 
 @item register_type_printer (locus, printer)
-This is a convenience function to register a type printer.
-@var{printer} is the type printer to register.  It must implement the
-type printer protocol.  @var{locus} is either a @code{gdb.Objfile}, in
-which case the printer is registered with that objfile; a
-@code{gdb.Progspace}, in which case the printer is registered with
-that progspace; or @code{None}, in which case the printer is
-registered globally.
+This is a convenience function to register a type printer
+@var{printer}.  The printer must implement the type printer protocol.
+The @var{locus} argument is either a @code{gdb.Objfile}, in which case
+the printer is registered with that objfile; a @code{gdb.Progspace},
+in which case the printer is registered with that progspace; or
+@code{None}, in which case the printer is registered globally.
 
 @item TypePrinter
 This is a base class that implements the type printer protocol.  Type

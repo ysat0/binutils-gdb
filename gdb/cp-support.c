@@ -20,9 +20,7 @@
 
 #include "defs.h"
 #include "cp-support.h"
-#include <string.h>
 #include "demangle.h"
-#include "gdb_assert.h"
 #include "gdbcmd.h"
 #include "dictionary.h"
 #include "objfiles.h"
@@ -31,11 +29,10 @@
 #include "block.h"
 #include "complaints.h"
 #include "gdbtypes.h"
-#include "exceptions.h"
 #include "expression.h"
 #include "value.h"
 #include "cp-abi.h"
-#include "language.h"
+#include <signal.h>
 
 #include "safe-ctype.h"
 
@@ -178,29 +175,7 @@ inspect_type (struct demangle_parse_info *info,
   sym = NULL;
   TRY_CATCH (except, RETURN_MASK_ALL)
   {
-    /* It is not legal to have a typedef and tag name of the same
-       name in C++.  However, anonymous composite types that are defined
-       with a typedef ["typedef struct {...} anonymous_struct;"] WILL
-       have symbols for a TYPE_CODE_TYPEDEF (in VAR_DOMAIN) and a
-       TYPE_CODE_STRUCT (in STRUCT_DOMAIN).
-
-       If VAR_DOMAIN is searched first, it will return the TYPEDEF symbol,
-       and this function will never output the definition of the typedef,
-       since type_print is called below with SHOW = -1. [The typedef hash
-       is never initialized/used when SHOW <= 0 -- and the finder
-       (find_typedef_for_canonicalize) will always return NULL as a result.]
-
-       Consequently, type_print will eventually keep calling this function
-       to replace the typedef (via
-       print_name_maybe_canonical/cp_canonicalize_full).  This leads to
-       infinite recursion.
-
-       This can all be safely avoid by explicitly searching STRUCT_DOMAIN
-       first to find the structure definition.  */
-    if (current_language->la_language == language_cplus)
-      sym = lookup_symbol (name, 0, STRUCT_DOMAIN, 0);
-    if (sym == NULL)
-      sym = lookup_symbol (name, 0, VAR_DOMAIN, NULL);
+    sym = lookup_symbol (name, 0, VAR_DOMAIN, 0);
   }
 
   if (except.reason >= 0 && sym != NULL)
@@ -1243,9 +1218,7 @@ make_symbol_overload_list_block (const char *name,
   struct block_iterator iter;
   struct symbol *sym;
 
-  for (sym = block_iter_name_first (block, name, &iter);
-       sym != NULL;
-       sym = block_iter_name_next (name, &iter))
+  ALL_BLOCK_SYMBOLS_WITH_NAME (block, name, iter, sym)
     overload_list_add_symbol (sym, name);
 }
 
@@ -1322,7 +1295,7 @@ make_symbol_overload_list_adl_namespace (struct type *type,
     }
 
   /* Check public base type */
-  if (TYPE_CODE (type) == TYPE_CODE_CLASS)
+  if (TYPE_CODE (type) == TYPE_CODE_STRUCT)
     for (i = 0; i < TYPE_N_BASECLASSES (type); i++)
       {
 	if (BASETYPE_VIA_PUBLIC (type, i))
@@ -1420,7 +1393,7 @@ make_symbol_overload_list_using (const char *func_name,
 static void
 make_symbol_overload_list_qualified (const char *func_name)
 {
-  struct symtab *s;
+  struct compunit_symtab *cust;
   struct objfile *objfile;
   const struct block *b, *surrounding_static_block = 0;
 
@@ -1444,17 +1417,17 @@ make_symbol_overload_list_qualified (const char *func_name)
   /* Go through the symtabs and check the externs and statics for
      symbols which match.  */
 
-  ALL_PRIMARY_SYMTABS (objfile, s)
+  ALL_COMPUNITS (objfile, cust)
   {
     QUIT;
-    b = BLOCKVECTOR_BLOCK (BLOCKVECTOR (s), GLOBAL_BLOCK);
+    b = BLOCKVECTOR_BLOCK (COMPUNIT_BLOCKVECTOR (cust), GLOBAL_BLOCK);
     make_symbol_overload_list_block (func_name, b);
   }
 
-  ALL_PRIMARY_SYMTABS (objfile, s)
+  ALL_COMPUNITS (objfile, cust)
   {
     QUIT;
-    b = BLOCKVECTOR_BLOCK (BLOCKVECTOR (s), STATIC_BLOCK);
+    b = BLOCKVECTOR_BLOCK (COMPUNIT_BLOCKVECTOR (cust), STATIC_BLOCK);
     /* Don't do this block twice.  */
     if (b == surrounding_static_block)
       continue;
@@ -1488,7 +1461,7 @@ cp_lookup_rtti_type (const char *name, struct block *block)
 
   switch (TYPE_CODE (rtti_type))
     {
-    case TYPE_CODE_CLASS:
+    case TYPE_CODE_STRUCT:
       break;
     case TYPE_CODE_NAMESPACE:
       /* chastain/2003-11-26: the symbol tables often contain fake
@@ -1505,12 +1478,134 @@ cp_lookup_rtti_type (const char *name, struct block *block)
   return rtti_type;
 }
 
+#ifdef HAVE_WORKING_FORK
+
+/* If nonzero, attempt to catch crashes in the demangler and print
+   useful debugging information.  */
+
+static int catch_demangler_crashes = 1;
+
+/* Stack context and environment for demangler crash recovery.  */
+
+static SIGJMP_BUF gdb_demangle_jmp_buf;
+
+/* If nonzero, attempt to dump core from the signal handler.  */
+
+static int gdb_demangle_attempt_core_dump = 1;
+
+/* Signal handler for gdb_demangle.  */
+
+static void
+gdb_demangle_signal_handler (int signo)
+{
+  if (gdb_demangle_attempt_core_dump)
+    {
+      if (fork () == 0)
+	dump_core ();
+
+      gdb_demangle_attempt_core_dump = 0;
+    }
+
+  SIGLONGJMP (gdb_demangle_jmp_buf, signo);
+}
+
+#endif
+
 /* A wrapper for bfd_demangle.  */
 
 char *
 gdb_demangle (const char *name, int options)
 {
-  return bfd_demangle (NULL, name, options);
+  char *result = NULL;
+  int crash_signal = 0;
+
+#ifdef HAVE_WORKING_FORK
+#if defined (HAVE_SIGACTION) && defined (SA_RESTART)
+  struct sigaction sa, old_sa;
+#else
+  void (*ofunc) ();
+#endif
+  static int core_dump_allowed = -1;
+
+  if (core_dump_allowed == -1)
+    {
+      core_dump_allowed = can_dump_core (LIMIT_CUR);
+
+      if (!core_dump_allowed)
+	gdb_demangle_attempt_core_dump = 0;
+    }
+
+  if (catch_demangler_crashes)
+    {
+#if defined (HAVE_SIGACTION) && defined (SA_RESTART)
+      sa.sa_handler = gdb_demangle_signal_handler;
+      sigemptyset (&sa.sa_mask);
+#ifdef HAVE_SIGALTSTACK
+      sa.sa_flags = SA_ONSTACK;
+#else
+      sa.sa_flags = 0;
+#endif
+      sigaction (SIGSEGV, &sa, &old_sa);
+#else
+      ofunc = (void (*)()) signal (SIGSEGV, gdb_demangle_signal_handler);
+#endif
+
+      crash_signal = SIGSETJMP (gdb_demangle_jmp_buf);
+    }
+#endif
+
+  if (crash_signal == 0)
+    result = bfd_demangle (NULL, name, options);
+
+#ifdef HAVE_WORKING_FORK
+  if (catch_demangler_crashes)
+    {
+#if defined (HAVE_SIGACTION) && defined (SA_RESTART)
+      sigaction (SIGSEGV, &old_sa, NULL);
+#else
+      signal (SIGSEGV, ofunc);
+#endif
+
+      if (crash_signal != 0)
+	{
+	  static int error_reported = 0;
+
+	  if (!error_reported)
+	    {
+	      char *short_msg, *long_msg;
+	      struct cleanup *back_to;
+
+	      short_msg = xstrprintf (_("unable to demangle '%s' "
+				      "(demangler failed with signal %d)"),
+				    name, crash_signal);
+	      back_to = make_cleanup (xfree, short_msg);
+
+	      long_msg = xstrprintf ("%s:%d: %s: %s", __FILE__, __LINE__,
+				    "demangler-warning", short_msg);
+	      make_cleanup (xfree, long_msg);
+
+	      target_terminal_ours ();
+	      begin_line ();
+	      if (core_dump_allowed)
+		fprintf_unfiltered (gdb_stderr,
+				    _("%s\nAttempting to dump core.\n"),
+				    long_msg);
+	      else
+		warn_cant_dump_core (long_msg);
+
+	      demangler_warning (__FILE__, __LINE__, "%s", short_msg);
+
+	      do_cleanups (back_to);
+
+	      error_reported = 1;
+	    }
+
+	  result = NULL;
+	}
+    }
+#endif
+
+  return result;
 }
 
 /* Don't allow just "maintenance cplus".  */
@@ -1522,7 +1617,7 @@ maint_cplus_command (char *arg, int from_tty)
 		       "by the name of a command.\n"));
   help_list (maint_cplus_cmd_list,
 	     "maintenance cplus ",
-	     -1, gdb_stdout);
+	     all_commands, gdb_stdout);
 }
 
 /* This is a front end for cp_find_first_component, for unit testing.
@@ -1585,4 +1680,17 @@ _initialize_cp_support (void)
 Usage: info vtbl EXPRESSION\n\
 Evaluate EXPRESSION and display the virtual function table for the\n\
 resulting object."));
+
+#ifdef HAVE_WORKING_FORK
+  add_setshow_boolean_cmd ("catch-demangler-crashes", class_maintenance,
+			   &catch_demangler_crashes, _("\
+Set whether to attempt to catch demangler crashes."), _("\
+Show whether to attempt to catch demangler crashes."), _("\
+If enabled GDB will attempt to catch demangler crashes and\n\
+display the offending symbol."),
+			   NULL,
+			   NULL,
+			   &maintenance_set_cmdlist,
+			   &maintenance_show_cmdlist);
+#endif
 }

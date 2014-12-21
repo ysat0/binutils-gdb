@@ -33,7 +33,6 @@
 #include "event-top.h"
 #include "inf-loop.h"
 #include <sys/stat.h>
-#include "exceptions.h"
 #include "inf-child.h"
 #include "value.h"
 #include "arch-utils.h"
@@ -46,7 +45,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
-#include <string.h>
 #include <ctype.h>
 #include <sys/sysctl.h>
 #include <sys/proc.h>
@@ -861,7 +859,7 @@ darwin_resume (ptid_t ptid, int step, enum gdb_signal signal)
     }
   else
     {
-      struct inferior *inf = find_inferior_pid (ptid_get_pid (ptid));
+      struct inferior *inf = find_inferior_ptid (ptid);
       long tid = ptid_get_tid (ptid);
 
       /* Stop the inferior (should be useless).  */
@@ -1672,7 +1670,7 @@ darwin_setup_fake_stop_event (struct inferior *inf)
 /* Attach to process PID, then initialize for debugging it
    and wait for the trace-trap that results from attaching.  */
 static void
-darwin_attach (struct target_ops *ops, char *args, int from_tty)
+darwin_attach (struct target_ops *ops, const char *args, int from_tty)
 {
   pid_t pid;
   pid_t pid2;
