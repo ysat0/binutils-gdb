@@ -5275,7 +5275,7 @@ static void show_trace(int lines)
   (*sim_callback->printf_filtered) (sim_callback, "\n");
 }
 
-static void save_trace(char *filename)
+static void save_trace(const char *filename)
 {
   FILE *fp;
   unsigned long idx;
@@ -5315,7 +5315,7 @@ static void show_memlog(int lines)
   (*sim_callback->printf_filtered) (sim_callback, "\n");
 }
 
-static void save_memlog(char *filename)
+static void save_memlog(const char *filename)
 {
   FILE *fp;
   unsigned long idx;
