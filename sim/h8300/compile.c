@@ -5336,7 +5336,7 @@ static void save_memlog(char *filename)
 }
 
 void
-sim_do_command (SIM_DESC sd, char *cmd)
+sim_do_command (SIM_DESC sd, const char *cmd)
 {
   if (cmd == NULL || *cmd == '\0')
     cmd = "help";
