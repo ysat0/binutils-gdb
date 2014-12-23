@@ -1973,14 +1973,15 @@ static int intlevel(SIM_DESC sd)
   } else if (h8300_interrupt_mode == 1) {
     switch((h8_get_ccr (sd) >> 6) & 3) {
     case 0:
-      return 0;
+    case 1:
+      return -1;
     case 2:
       return 1 << 8;
     case 3:
       return 0x100 << 8;
     }
   } else {
-    return h8_get_ccr (sd) & 0x80?0x100 << 8:0;
+    return h8_get_ccr (sd) & 0x80?0x100 << 8:-1;
   }
 }
 
