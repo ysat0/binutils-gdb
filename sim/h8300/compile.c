@@ -46,6 +46,7 @@ host_callback *sim_callback;
 
 static SIM_OPEN_KIND sim_kind;
 static char *myname;
+static int verbose_interrupt = 0;
 
 /* FIXME: Needs to live in header file.
    This header should also include the things in remote-sim.h.
@@ -2072,6 +2073,9 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	      unsigned long vbr = 0;
 	      int pri = ((vector & 0xff00) >> 8) & 7;
 	      vector &= 0xff;
+	      if (verbose_interrupt)
+		(*sim_callback->printf_filtered)
+		  (sim_callback, "sim_resume: interrupt occured %d\n", vector);
 	      BUILDSR (sd);
 	      ccr = h8_get_ccr (sd);
 	      tmp = h8_get_reg (sd, SP_REGNUM);
@@ -5402,6 +5406,12 @@ sim_do_command (SIM_DESC sd, const char *cmd)
 	  sci_open_net(sim_callback, atoi(cmd));
 	}
     }
+  else if (strncmp (cmd, "verbose-int", 11) == 0)
+    {
+      cmd += 11;
+      while(isspace(*cmd)) cmd++;
+      verbose_interrupt = atoi(cmd);
+    }
   else if (strncmp(cmd, "help", 4) == 0)
     (*sim_callback->printf_filtered) (sim_callback,
 				      "List of H8/300 Simulator commands\n\n"
@@ -5411,6 +5421,7 @@ sim_do_command (SIM_DESC sd, const char *cmd)
 				      "save-mem filename -- save memory access log\n"
 				      "sci [pty|net port] -- open sci port\n"
 				      "intmode mode -- set interrupt mode\n"
+				      "verbose-int -- verbose interrupt\n"
 	    );
   else if (strncmp(cmd, "intmode", 7) == 0)
     {
