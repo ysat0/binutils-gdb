@@ -35,7 +35,7 @@
 
 const char comment_chars[] = ";";
 const char line_comment_chars[] = "#";
-const char line_separator_chars[] = "";
+const char line_separator_chars[] = "!";
 
 static void sbranch (int);
 static void h8300hmode (int);
