@@ -35,7 +35,11 @@
 
 const char comment_chars[] = ";";
 const char line_comment_chars[] = "#";
+#ifdef TE_LINUX
 const char line_separator_chars[] = "!";
+#else
+const char line_separator_chars[] = "";
+#endif
 
 static void sbranch (int);
 static void h8300hmode (int);
