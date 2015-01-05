@@ -1,6 +1,6 @@
 /* Convert symbols from GDB to GCC
 
-   Copyright (C) 2014 Free Software Foundation, Inc.
+   Copyright (C) 2014-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -149,7 +149,7 @@ convert_one_symbol (struct compile_c_instance *context,
 		    int is_local)
 {
   gcc_type sym_type;
-  const char *filename = SYMBOL_SYMTAB (sym)->filename;
+  const char *filename = symbol_symtab (sym)->filename;
   unsigned short line = SYMBOL_LINE (sym);
 
   error_symbol_once (context, sym);

@@ -1,6 +1,6 @@
 /* Cache and manage frames for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2014 Free Software Foundation, Inc.
+   Copyright (C) 1986-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -2346,7 +2346,7 @@ find_frame_sal (struct frame_info *frame, struct symtab_and_line *sal)
       init_sal (sal);
       if (SYMBOL_LINE (sym) != 0)
 	{
-	  sal->symtab = SYMBOL_SYMTAB (sym);
+	  sal->symtab = symbol_symtab (sym);
 	  sal->line = SYMBOL_LINE (sym);
 	}
       else

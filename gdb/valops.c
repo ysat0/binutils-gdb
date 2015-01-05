@@ -1,6 +1,6 @@
 /* Perform non-arithmetic operations on values, for GDB.
 
-   Copyright (C) 1986-2014 Free Software Foundation, Inc.
+   Copyright (C) 1986-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -139,7 +139,7 @@ find_function_in_inferior (const char *name, struct objfile **objf_p)
 	}
 
       if (objf_p)
-	*objf_p = SYMBOL_OBJFILE (sym);
+	*objf_p = symbol_objfile (sym);
 
       return value_of_variable (sym, NULL);
     }

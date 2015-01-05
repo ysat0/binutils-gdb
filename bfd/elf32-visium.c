@@ -1,6 +1,6 @@
 /* Visium-specific support for 32-bit ELF.
 
-   Copyright (C) 2003-2014 Free Software Foundation, Inc.
+   Copyright (C) 2003-2015 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -501,6 +501,11 @@ visium_info_to_howto_rela (bfd *abfd ATTRIBUTE_UNUSED, arelent *cache_ptr,
       break;
 
     default:
+      if (r_type >= (unsigned int) R_VISIUM_max)
+	{
+	  _bfd_error_handler (_("%A: invalid Visium reloc number: %d"), abfd, r_type);
+	  r_type = 0;
+	}
       cache_ptr->howto = &visium_elf_howto_table[r_type];
       break;
     }

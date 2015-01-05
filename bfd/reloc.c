@@ -1,5 +1,5 @@
 /* BFD support for handling relocation entries.
-   Copyright (C) 1990-2014 Free Software Foundation, Inc.
+   Copyright (C) 1990-2015 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -7623,6 +7623,10 @@ bfd_generic_get_relocated_section_contents (bfd *abfd,
 	      (*parent)->howto = &none_howto;
 	      r = bfd_reloc_ok;
 	    }
+	  /* PR 17512: file: c146ab8b.  */
+	  else if ((*parent)->address * bfd_octets_per_byte (abfd)
+		   >= bfd_get_section_size (input_section))
+	    r = bfd_reloc_outofrange;
 	  else
 	    r = bfd_perform_relocation (input_bfd,
 					*parent,

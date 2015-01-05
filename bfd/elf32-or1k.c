@@ -1,5 +1,5 @@
 /* Or1k-specific support for 32-bit ELF.
-   Copyright 2001-2014 Free Software Foundation, Inc.
+   Copyright (C) 2001-2015 Free Software Foundation, Inc.
    Contributed for OR32 by Johan Rydberg, jrydberg@opencores.org
 
    PIC parts added by Stefan Kristiansson, stefan.kristiansson@saunalahti.fi,
@@ -738,7 +738,11 @@ or1k_info_to_howto_rela (bfd * abfd ATTRIBUTE_UNUSED,
   unsigned int r_type;
 
   r_type = ELF32_R_TYPE (dst->r_info);
-  BFD_ASSERT (r_type < (unsigned int) R_OR1K_max);
+  if (r_type >= (unsigned int) R_OR1K_max)
+    {
+      _bfd_error_handler (_("%A: invalid OR1K reloc number: %d"), abfd, r_type);
+      r_type = 0;
+    }
   cache_ptr->howto = & or1k_elf_howto_table[r_type];
 }
 
