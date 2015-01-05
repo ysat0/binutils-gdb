@@ -1,5 +1,5 @@
 /* FRV-specific support for 32-bit ELF.
-   Copyright (C) 2002-2014 Free Software Foundation, Inc.
+   Copyright (C) 2002-2015 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -2557,6 +2557,11 @@ frv_info_to_howto_rela (bfd *abfd ATTRIBUTE_UNUSED,
       break;
 
     default:
+      if (r_type >= (unsigned int) R_FRV_max)
+	{
+	  _bfd_error_handler (_("%A: invalid FRV reloc number: %d"), abfd, r_type);
+	  r_type = 0;
+	}
       cache_ptr->howto = & elf32_frv_howto_table [r_type];
       break;
     }

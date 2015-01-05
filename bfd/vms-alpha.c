@@ -1,5 +1,5 @@
 /* vms.c -- BFD back-end for EVAX (openVMS/Alpha) files.
-   Copyright (C) 1996-2014 Free Software Foundation, Inc.
+   Copyright (C) 1996-2015 Free Software Foundation, Inc.
 
    Initial version written by Klaus Kaempf (kkaempf@rmi.de)
    Major rewrite by Adacore.
@@ -521,9 +521,11 @@ _bfd_vms_slurp_eisd (bfd *abfd, unsigned int offset)
       asection *section;
       flagword bfd_flags;
 
+      /* PR 17512: file: 3d9e9fe9.  */
+      if (offset >= PRIV (recrd.rec_size))
+	return FALSE;
       eisd = (struct vms_eisd *)(PRIV (recrd.rec) + offset);
       rec_size = bfd_getl32 (eisd->eisdsize);
-
       if (rec_size == 0)
         break;
 
@@ -2527,6 +2529,9 @@ alpha_vms_object_p (bfd *abfd)
       /* Reset the record pointer.  */
       PRIV (recrd.rec) = buf;
 
+      /* PR 17512: file: 7d7c57c2.  */
+      if (PRIV (recrd.rec_size) < sizeof (struct vms_eihd))
+	goto error_ret;
       vms_debug2 ((2, "file type is image\n"));
 
       if (_bfd_vms_slurp_eihd (abfd, &eisd_offset, &eihs_offset) != TRUE)

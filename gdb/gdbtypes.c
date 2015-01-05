@@ -1,6 +1,6 @@
 /* Support routines for manipulating internal types for GDB.
 
-   Copyright (C) 1992-2014 Free Software Foundation, Inc.
+   Copyright (C) 1992-2015 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support, using pieces from other GDB modules.
 
@@ -1306,13 +1306,10 @@ lookup_typename (const struct language_defn *language,
   struct symbol *sym;
   struct type *type;
 
-  sym = lookup_symbol (name, block, VAR_DOMAIN, 0);
+  sym = lookup_symbol_in_language (name, block, VAR_DOMAIN,
+				   language->la_language, NULL);
   if (sym != NULL && SYMBOL_CLASS (sym) == LOC_TYPEDEF)
     return SYMBOL_TYPE (sym);
-
-  type = language_lookup_primitive_type (language, gdbarch, name);
-  if (type)
-    return type;
 
   if (noerr)
     return NULL;

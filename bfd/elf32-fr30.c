@@ -1,5 +1,5 @@
 /* FR30-specific support for 32-bit ELF.
-   Copyright (C) 1998-2014 Free Software Foundation, Inc.
+   Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -375,7 +375,11 @@ fr30_info_to_howto_rela (bfd *abfd ATTRIBUTE_UNUSED,
   unsigned int r_type;
 
   r_type = ELF32_R_TYPE (dst->r_info);
-  BFD_ASSERT (r_type < (unsigned int) R_FR30_max);
+  if (r_type >= (unsigned int) R_FR30_max)
+    {
+      _bfd_error_handler (_("%A: invalid FR30 reloc number: %d"), abfd, r_type);
+      r_type = 0;
+    }
   cache_ptr->howto = & fr30_elf_howto_table [r_type];
 }
 

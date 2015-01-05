@@ -1,5 +1,5 @@
 /* MeP-specific support for 32-bit ELF.
-   Copyright (C) 2001-2014 Free Software Foundation, Inc.
+   Copyright (C) 2001-2015 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -400,6 +400,11 @@ mep_info_to_howto_rela
   unsigned int r_type;
 
   r_type = ELF32_R_TYPE (dst->r_info);
+  if (r_type >= R_MEP_max)
+    {
+      _bfd_error_handler (_("%A: invalid MEP reloc number: %d"), abfd, r_type);
+      r_type = 0;
+    }
   cache_ptr->howto = & mep_elf_howto_table [r_type];
 }
 

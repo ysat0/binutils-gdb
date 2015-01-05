@@ -1,3 +1,16 @@
+2015-01-02  Doug Evans  <xdje42@gmail.com>
+
+	* gdb.cp/nsalias.exp: Fix output of external/declaration flags.
+
+2015-01-02  Doug Evans  <dje@google.com>
+
+	* gdb.dwarf2/dw4-sig-types.exp: Also pass -fdebug-types-section to gcc.
+
+2014-12-29  Yao Qi  <yao@codesourcery.com>
+
+	* gdb.trace/entry-values.exp: Update comments.  Rename variable
+	bar_call_foo to returned_from_foo.
+
 2014-12-20  Mihail-Marian Nistor  <mihail.nistor@freescale.com>
 
 	PR gdb/17394
@@ -190,9 +203,9 @@
 
 2014-12-02  Doug Evans  <dje@google.com>
 
-        PR symtab/17602
+	PR symtab/17602
 	* gdb.cp/anon-ns.cc: Move guts of this file to ...
-	* gdb.cp/anon-ns-2.cc: ... here.  New file.
+	* gdb.cp/anon-ns2.cc: ... here.  New file.
 	* gdb.cp/anon-ns.exp: Update.
 
 2014-12-02  Nick Bull  <nicholaspbull@gmail.com>
@@ -3672,6 +3685,6 @@ For older changes see ChangeLog-1993-2013.
 ;; version-control: never
 ;; End:
 
-    Copyright 2014 Free Software Foundation, Inc.
+    Copyright 2014-2015 Free Software Foundation, Inc.
   Copying and distribution of this file, with or without modification,
   are permitted provided the copyright notice and this notice are preserved.

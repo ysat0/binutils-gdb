@@ -1,6 +1,6 @@
 /* Memory-access and commands for "inferior" process, for GDB.
 
-   Copyright (C) 1986-2014 Free Software Foundation, Inc.
+   Copyright (C) 1986-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -1202,7 +1202,7 @@ jump_command (char *arg, int from_tty)
       struct obj_section *section;
 
       fixup_symbol_section (sfn, 0);
-      section = SYMBOL_OBJ_SECTION (SYMBOL_OBJFILE (sfn), sfn);
+      section = SYMBOL_OBJ_SECTION (symbol_objfile (sfn), sfn);
       if (section_is_overlay (section)
 	  && !section_is_mapped (section))
 	{

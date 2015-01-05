@@ -1,5 +1,5 @@
 /* Meta support for 32-bit ELF
-   Copyright (C) 2013-2014 Free Software Foundation, Inc.
+   Copyright (C) 2013-2015 Free Software Foundation, Inc.
    Contributed by Imagination Technologies Ltd.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -896,7 +896,11 @@ metag_info_to_howto_rela (bfd *abfd ATTRIBUTE_UNUSED,
   unsigned int r_type;
 
   r_type = ELF32_R_TYPE (dst->r_info);
-  BFD_ASSERT (r_type < (unsigned int) R_METAG_MAX);
+  if (r_type >= (unsigned int) R_METAG_MAX)
+    {
+      _bfd_error_handler (_("%A: invalid METAG reloc number: %d"), abfd, r_type);
+      r_type = 0;
+    }
   cache_ptr->howto = & elf_metag_howto_table [r_type];
 }
 

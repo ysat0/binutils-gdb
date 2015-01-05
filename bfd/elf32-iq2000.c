@@ -1,5 +1,5 @@
 /* IQ2000-specific support for 32-bit ELF.
-   Copyright (C) 2003-2014 Free Software Foundation, Inc.
+   Copyright (C) 2003-2015 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -435,6 +435,11 @@ iq2000_info_to_howto_rela (bfd * abfd ATTRIBUTE_UNUSED,
       break;
 
     default:
+      if (r_type >= (unsigned int) R_IQ2000_max)
+	{
+	  _bfd_error_handler (_("%A: invalid IQ2000 reloc number: %d"), abfd, r_type);
+	  r_type = 0;
+	}
       cache_ptr->howto = & iq2000_elf_howto_table [r_type];
       break;
     }
